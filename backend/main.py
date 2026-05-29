@@ -102,6 +102,15 @@ def encode_frame(frame: np.ndarray) -> str:
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
+
+@app.get("/")
+def root():
+    return {
+        "service": "CaptureChain API",
+        "status": "running",
+        "docs": "/docs",
+        "health": "/health"
+    }
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "timestamp": time.time()}
