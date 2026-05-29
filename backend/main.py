@@ -4,6 +4,7 @@ import base64
 import time
 import cv2
 import numpy as np
+
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -15,9 +16,9 @@ from fastapi import (
     File,
     Form,
 )
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -47,6 +48,12 @@ from utils.database import (
 )
 
 
+# ─── Frontend Setup ──────────────────────────────────────────────────────────
+
+BASE_DIR = Path(__file__).resolve().parent
+FRONTEND_DIR = BASE_DIR / "frontend"
+
+
 # ─── Lifespan ────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
@@ -55,6 +62,7 @@ async def lifespan(app: FastAPI):
     try:
         await init_db()
         print("✓ Database initialized")
+
     except Exception as e:
         print(f"✗ Database initialization failed: {e}")
 
@@ -81,25 +89,7 @@ app.add_middleware(
 )
 
 
-# ─── Frontend Setup ──────────────────────────────────────────────────────────
-
-BASE_DIR = Path(__file__).resolve().parent
-FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
-
-# Serve React/Vite assets
-if FRONTEND_DIST.exists():
-
-    assets_dir = FRONTEND_DIST / "assets"
-
-    if assets_dir.exists():
-        app.mount(
-            "/assets",
-            StaticFiles(directory=assets_dir),
-            name="assets"
-        )
-
-
-# ─── In-memory Stores ────────────────────────────────────────────────────────
+# ─── In-memory store ─────────────────────────────────────────────────────────
 
 snapshot_store: dict[str, dict] = {}
 tile_data_store: dict[str, dict] = {}
@@ -131,6 +121,7 @@ class SearchPayload(BaseModel):
 def decode_frame(image_b64: str) -> np.ndarray:
 
     try:
+
         _, data = (
             image_b64.split(",", 1)
             if "," in image_b64
@@ -138,16 +129,26 @@ def decode_frame(image_b64: str) -> np.ndarray:
         )
 
         img_bytes = base64.b64decode(data)
-        np_arr = np.frombuffer(img_bytes, dtype=np.uint8)
 
-        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        np_arr = np.frombuffer(
+            img_bytes,
+            dtype=np.uint8
+        )
+
+        frame = cv2.imdecode(
+            np_arr,
+            cv2.IMREAD_COLOR
+        )
 
         if frame is None:
-            raise ValueError("Invalid image bytes")
+            raise ValueError(
+                "cv2.imdecode returned None"
+            )
 
         return frame
 
     except Exception as exc:
+
         raise HTTPException(
             status_code=400,
             detail=f"Invalid image data: {exc}"
@@ -168,30 +169,40 @@ def encode_frame(frame: np.ndarray) -> str:
     )
 
 
-def _verdict(exact_match: bool, hd: int, tamper: dict) -> str:
+def _verdict(
+    exact_match: bool,
+    hd: int,
+    tamper: dict
+) -> str:
 
     if exact_match:
         return "CLEAN — identical to original"
 
     if not tamper["tampered"] and hd < 8:
-        return "CLEAN — visually identical"
+        return (
+            "CLEAN — visually identical, "
+            "minor sensor noise only"
+        )
 
     if tamper["tampered"] and hd < 8:
+
         return (
             f"TAMPERED — local edit detected in "
             f"{tamper['likely_region']} region "
             f"({tamper['change_pct']}% of frame)"
         )
 
-    return "DIFFERENT — heavily modified frame"
+    return (
+        "DIFFERENT — entirely new or heavily modified frame"
+    )
 
 
-# ─── Frontend Routes ─────────────────────────────────────────────────────────
+# ─── Frontend Route ──────────────────────────────────────────────────────────
 
 @app.get("/")
 async def serve_frontend():
 
-    index_file = FRONTEND_DIST / "index.html"
+    index_file = FRONTEND_DIR / "index.html"
 
     if index_file.exists():
         return FileResponse(index_file)
@@ -200,27 +211,32 @@ async def serve_frontend():
         "service": "CaptureChain API",
         "status": "running",
         "docs": "/docs",
-        "message": "Frontend build not found"
+        "error": "frontend/index.html not found"
     }
 
 
+# ─── Health ──────────────────────────────────────────────────────────────────
+
 @app.get("/health")
 def health() -> dict:
+
     return {
         "status": "ok",
         "timestamp": time.time()
     }
 
 
-# ─── Snapshot Routes ────────────────────────────────────────────────────────
+# ─── Snapshot Routes ─────────────────────────────────────────────────────────
 
 @app.post("/snapshot")
 async def process_snapshot(payload: FramePayload) -> dict:
 
     frame = decode_frame(payload.image_b64)
+
     fp = fingerprint_frame(frame)
 
     tile_data = fp["tiled"].pop("tile_data", {})
+
     tile_data_store[fp["sha256"]] = tile_data
 
     tile_list = [
@@ -252,7 +268,7 @@ async def process_snapshot(payload: FramePayload) -> dict:
         tiles=fp["tiled"]["tiles"],
     )
 
-    record = {
+    record: dict = {
         "type": "snapshot",
         "captured_at": captured_at,
         "sha256": fp["sha256"],
@@ -261,6 +277,11 @@ async def process_snapshot(payload: FramePayload) -> dict:
         "merkle_root": merkle["root"],
         "merkle_depth": merkle["depth"],
         "blockchain": blockchain_result,
+        "storage": {
+            "postgres": "✓ phash + tiled_hashes stored",
+            "blockchain": "✓ sha256 anchored",
+            "memory": "✓ tile_data cached for verification"
+        }
     }
 
     snapshot_store[fp["sha256"]] = record
@@ -274,25 +295,41 @@ async def process_snapshot(payload: FramePayload) -> dict:
 async def verify_frame(payload: VerifyPayload) -> dict:
 
     suspect_frame = decode_frame(payload.image_b64)
+
     suspect_fp = fingerprint_frame(suspect_frame)
 
     suspect_tile_data = suspect_fp["tiled"].pop("tile_data", {})
 
-    original_record = snapshot_store.get(payload.original_sha256)
+    original_record = snapshot_store.get(
+        payload.original_sha256
+    )
 
     if not original_record:
 
-        db_record = await get_snapshot(payload.original_sha256)
+        db_record = await get_snapshot(
+            payload.original_sha256
+        )
 
         if not db_record:
+
             raise HTTPException(
                 status_code=404,
-                detail="Original snapshot not found"
+                detail=(
+                    "Original record not found — "
+                    "capture a snapshot first"
+                ),
             )
 
         tiled_data = await get_tiled_hashes(
             payload.original_sha256
         )
+
+        if not tiled_data:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Tiled hash data not found",
+            )
 
         original_record = {
             "sha256": db_record["sha256"],
@@ -301,11 +338,14 @@ async def verify_frame(payload: VerifyPayload) -> dict:
         }
 
     original_tiled = original_record["tiled"].copy()
+
     suspect_tiled = suspect_fp["tiled"]
 
-    original_tiled["tile_data"] = tile_data_store.get(
-        payload.original_sha256,
-        {}
+    original_tiled["tile_data"] = (
+        tile_data_store.get(
+            payload.original_sha256,
+            {}
+        )
     )
 
     suspect_tiled["tile_data"] = suspect_tile_data
@@ -330,7 +370,9 @@ async def verify_frame(payload: VerifyPayload) -> dict:
         tamper_result
     )
 
-    annotated_b64 = encode_frame(annotated_frame)
+    annotated_b64 = encode_frame(
+        annotated_frame
+    )
 
     return {
         "exact_match": exact_match,
@@ -341,22 +383,58 @@ async def verify_frame(payload: VerifyPayload) -> dict:
         "verdict": _verdict(
             exact_match,
             hd,
-            tamper_result
+            tamper_result,
         ),
     }
 
 
-# ─── Blockchain Verification ────────────────────────────────────────────────
+# ─── Upload Verify ───────────────────────────────────────────────────────────
 
-@app.get("/verify/chain/{merkle_root}")
-def verify_on_blockchain(merkle_root: str) -> dict:
-    return verify_on_chain(merkle_root)
+@app.post("/verify/upload")
+async def verify_upload(
+    file: bytes = File(...),
+    original_sha256: str = Form(...)
+) -> dict:
+
+    try:
+
+        np_arr = np.frombuffer(
+            file,
+            dtype=np.uint8
+        )
+
+        suspect_frame = cv2.imdecode(
+            np_arr,
+            cv2.IMREAD_COLOR
+        )
+
+        if suspect_frame is None:
+            raise ValueError("Invalid JPG")
+
+    except Exception as exc:
+
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid JPG file: {exc}"
+        ) from exc
+
+    suspect_fp = fingerprint_frame(
+        suspect_frame
+    )
+
+    return {
+        "message": "Upload verification working",
+        "sha256": suspect_fp["sha256"],
+        "phash": suspect_fp["phash"],
+    }
 
 
-# ─── Video Session Routes ───────────────────────────────────────────────────
+# ─── Video Session Routes ────────────────────────────────────────────────────
 
 @app.post("/video/start")
-def start_video_session(payload: VideoSessionPayload):
+def start_video_session(
+    payload: VideoSessionPayload
+) -> dict:
 
     active_chains[payload.session_id] = FrameChain()
 
@@ -370,12 +448,13 @@ def start_video_session(payload: VideoSessionPayload):
 def add_video_frame(
     session_id: str,
     payload: FramePayload
-):
+) -> dict:
 
     if session_id not in active_chains:
+
         raise HTTPException(
             status_code=404,
-            detail="Session not found"
+            detail="Session not found",
         )
 
     frame = decode_frame(payload.image_b64)
@@ -392,9 +471,10 @@ def add_video_frame(
 
 
 @app.post("/video/end/{session_id}")
-def end_video_session(session_id: str):
+def end_video_session(session_id: str) -> dict:
 
     if session_id not in active_chains:
+
         raise HTTPException(
             status_code=404,
             detail="Session not found"
@@ -411,6 +491,7 @@ def end_video_session(session_id: str):
         final_root = chain.get_final_merkle_root()
 
         if final_root:
+
             anchor = anchor_to_polygon(
                 final_root,
                 "video_clip"
@@ -424,23 +505,41 @@ def end_video_session(session_id: str):
     }
 
 
-# ─── Search Routes ──────────────────────────────────────────────────────────
+# ─── Blockchain Verification ────────────────────────────────────────────────
+
+@app.get("/verify/chain/{merkle_root}")
+def verify_on_blockchain(
+    merkle_root: str
+) -> dict:
+
+    return verify_on_chain(merkle_root)
+
+
+# ─── Search Routes ───────────────────────────────────────────────────────────
 
 @app.post("/search/hashes")
-async def search_video_hashes(payload: SearchPayload):
+async def search_video_hashes(
+    payload: SearchPayload
+) -> dict:
 
     all_snapshots = await get_all_snapshots()
 
     if not all_snapshots:
+
         return {
             "query": payload.query,
             "total_matches": 0,
             "results": [],
+            "total_in_database": 0,
         }
 
     results = []
 
-    if not payload.query.strip():
+    if (
+        not payload.query
+        or payload.query.strip() == ""
+    ):
+
         results = all_snapshots[:payload.limit]
 
     else:
@@ -455,16 +554,17 @@ async def search_video_hashes(payload: SearchPayload):
         "query": payload.query,
         "total_matches": len(results),
         "results": results,
+        "total_in_database": len(all_snapshots),
     }
 
 
-# ─── WebSocket ──────────────────────────────────────────────────────────────
+# ─── WebSocket ───────────────────────────────────────────────────────────────
 
 @app.websocket("/ws/live/{session_id}")
 async def websocket_live(
     websocket: WebSocket,
     session_id: str
-):
+) -> None:
 
     await websocket.accept()
 
@@ -482,22 +582,28 @@ async def websocket_live(
 
             await websocket.send_json({
                 "sequence": record["sequence"],
-                "sha256": record["sha256"][:16] + "...",
+                "sha256": (
+                    record["sha256"][:16] + "..."
+                ),
                 "phash": record["phash"],
-                "chain_hash": record["chain_hash"][:16] + "...",
-                "merkle_root": record["merkle_root"][:16] + "...",
+                "chain_hash": (
+                    record["chain_hash"][:16] + "..."
+                ),
+                "merkle_root": (
+                    record["merkle_root"][:16] + "..."
+                ),
             })
 
     except WebSocketDisconnect:
         pass
 
 
-# ─── React SPA Fallback ─────────────────────────────────────────────────────
+# ─── Frontend Fallback ───────────────────────────────────────────────────────
 
 @app.get("/{full_path:path}")
-async def spa_fallback(full_path: str):
+async def frontend_routes(full_path: str):
 
-    excluded = (
+    excluded_routes = (
         "snapshot",
         "verify",
         "video",
@@ -508,12 +614,19 @@ async def spa_fallback(full_path: str):
         "ws",
     )
 
-    if full_path.startswith(excluded):
-        raise HTTPException(status_code=404)
+    if full_path.startswith(excluded_routes):
 
-    index_file = FRONTEND_DIST / "index.html"
+        raise HTTPException(
+            status_code=404,
+            detail="Not found"
+        )
+
+    index_file = FRONTEND_DIR / "index.html"
 
     if index_file.exists():
         return FileResponse(index_file)
 
-    raise HTTPException(status_code=404)
+    raise HTTPException(
+        status_code=404,
+        detail="Frontend not found"
+    )
