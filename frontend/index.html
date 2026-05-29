@@ -1103,7 +1103,7 @@
  
 
 <script>
-  const API = 'http://localhost:8000';
+  const API = 'https://capchain-vap3.onrender.com';
 
   let snapStream = null, verStream = null, vidStream = null, wsStream = null;
   let snapSha256 = null;
@@ -2013,7 +2013,7 @@
     if (!wsStream) return;
 
     const sid   = uuidv4().slice(0, 8);
-    const wsUrl = `ws://localhost:8000/ws/live/${sid}`;
+    const wsUrl = `ws://https://capchain-vap3.onrender.com/ws/live/${sid}`;
     document.getElementById('ws-state').textContent = 'Connecting';
     wsLog(`Connecting to ${wsUrl}`);
 
