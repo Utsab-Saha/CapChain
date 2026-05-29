@@ -1,0 +1,2086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CapChain — Forensic Frame Fingerprinting</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #07090f;
+      --surface:     #0c0f17;
+      --card:        #10131d;
+      --card-hover:  #131722;
+      --border:      #1a2035;
+      --border2:     #242c42;
+      --accent:      #4a7fc1;
+      --accent-dim:  rgba(74,127,193,0.10);
+      --accent-sub:  rgba(74,127,193,0.06);
+      --verified:    #3a9e6e;
+      --verified-dim:rgba(58,158,110,0.10);
+      --danger:      #b94040;
+      --danger-dim:  rgba(185,64,64,0.10);
+      --warning:     #c4881a;
+      --warning-dim: rgba(196,136,26,0.10);
+      --text:        #b8c8e0;
+      --text2:       #5a6e8a;
+      --text3:       #2e3a50;
+      --mono:        'IBM Plex Mono', 'Courier New', monospace;
+      --sans:        'Outfit', system-ui, sans-serif;
+      --r:           4px;
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-weight: 400;
+    }
+
+    /* ── HEADER ─────────────────────────────────────────────────────── */
+    header {
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.75rem;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      flex-shrink: 0;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: .85rem;
+    }
+
+    .logo-mark {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border: 1.5px solid var(--border2);
+      border-radius: 3px;
+      color: var(--accent);
+    }
+
+    .logo-mark i { font-size: 15px; }
+
+    .logo-wordmark {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .logo-name {
+      font-family: var(--mono);
+      font-size: .78rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .logo-sub {
+      font-family: var(--mono);
+      font-size: .52rem;
+      letter-spacing: .15em;
+      color: var(--text2);
+      text-transform: uppercase;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }
+
+    .header-tag {
+      font-family: var(--mono);
+      font-size: .6rem;
+      letter-spacing: .1em;
+      color: var(--text3);
+      text-transform: uppercase;
+      border: 1px solid var(--border);
+      padding: 3px 8px;
+      border-radius: 2px;
+    }
+
+    #api-status {
+      display: flex;
+      align-items: center;
+      gap: .45rem;
+      font-family: var(--mono);
+      font-size: .62rem;
+      letter-spacing: .06em;
+      color: var(--text2);
+    }
+
+    .status-indicator {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--text3);
+      flex-shrink: 0;
+    }
+
+    @keyframes pulse-verified {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(58,158,110,.5); }
+      60%       { box-shadow: 0 0 0 4px rgba(58,158,110,0); }
+    }
+    @keyframes pulse-danger {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(185,64,64,.4); }
+      60%       { box-shadow: 0 0 0 4px rgba(185,64,64,0); }
+    }
+
+    .status-indicator.online  { background: var(--verified); animation: pulse-verified 2.2s infinite; }
+    .status-indicator.offline { background: var(--danger);   animation: pulse-danger 2.2s infinite; }
+
+    /* ── LAYOUT ─────────────────────────────────────────────────────── */
+    .app-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── SIDEBAR ────────────────────────────────────────────────────── */
+    .sidebar {
+      width: 200px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 1.25rem 0;
+    }
+
+    .sidebar-group-label {
+      font-family: var(--mono);
+      font-size: .55rem;
+      letter-spacing: .18em;
+      color: var(--text3);
+      text-transform: uppercase;
+      padding: 0 1rem;
+      margin-bottom: .5rem;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+      padding: .55rem 1rem;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: var(--text2);
+      font-family: var(--sans);
+      font-size: .82rem;
+      font-weight: 400;
+      letter-spacing: .01em;
+      text-align: left;
+      width: 100%;
+      position: relative;
+      transition: color .12s, background .12s;
+      border-left: 2px solid transparent;
+    }
+
+    .nav-item:hover {
+      color: var(--text);
+      background: rgba(255,255,255,.02);
+    }
+
+    .nav-item.active {
+      color: var(--accent);
+      background: var(--accent-sub);
+      border-left-color: var(--accent);
+    }
+
+    .nav-item i {
+      font-size: 15px;
+      width: 16px;
+      text-align: center;
+      flex-shrink: 0;
+      opacity: .85;
+    }
+
+    .nav-divider {
+      height: 1px;
+      background: var(--border);
+      margin: .85rem 1rem;
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding: .85rem 1rem 0;
+      font-family: var(--mono);
+      font-size: .57rem;
+      color: var(--text3);
+      line-height: 1.9;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── CONTENT ────────────────────────────────────────────────────── */
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.25rem;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: grid; grid-template-columns: 1fr 1fr; gap: .85rem; }
+
+    /* ── CARD ───────────────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 1.1rem;
+      position: relative;
+    }
+
+    .col-full { grid-column: 1 / -1; }
+
+    .card-title {
+      font-family: var(--mono);
+      font-size: .6rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: .16em;
+      color: var(--text3);
+      margin-bottom: .9rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    .card-title i {
+      font-size: 13px;
+      color: var(--accent);
+      opacity: .7;
+    }
+
+    .card-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── CAMERA ─────────────────────────────────────────────────────── */
+    .camera-wrap {
+      position: relative;
+      background: #000;
+      border-radius: 3px;
+      overflow: hidden;
+      aspect-ratio: 4/3;
+      border: 1px solid var(--border2);
+    }
+
+    .camera-wrap::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,.05) 2px, rgba(0,0,0,.05) 4px
+      );
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    video, canvas.preview {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    canvas.preview { display: none; position: absolute; inset: 0; }
+
+    .cam-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: .4rem;
+      background: rgba(7,9,15,.88);
+      font-family: var(--mono);
+      font-size: .65rem;
+      letter-spacing: .05em;
+      color: var(--text3);
+      z-index: 3;
+    }
+
+    .cam-overlay i { font-size: 2rem; opacity: .3; margin-bottom: .25rem; }
+
+    .rec-badge {
+      position: absolute;
+      top: .55rem; left: .55rem;
+      background: var(--danger);
+      color: #fff;
+      font-family: var(--mono);
+      font-size: .55rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      padding: 2px 7px;
+      border-radius: 2px;
+      display: none;
+      z-index: 4;
+      animation: blink-rec 1.8s infinite;
+    }
+
+    @keyframes blink-rec {
+      0%, 75%, 100% { opacity: 1; }
+      40% { opacity: .3; }
+    }
+
+    .cam-coords {
+      position: absolute;
+      bottom: .5rem; right: .6rem;
+      font-family: var(--mono);
+      font-size: .52rem;
+      color: rgba(74,127,193,.4);
+      letter-spacing: .05em;
+      z-index: 4;
+      display: none;
+    }
+
+    /* ── BUTTONS ────────────────────────────────────────────────────── */
+    .btn-row {
+      display: flex;
+      gap: .4rem;
+      flex-wrap: wrap;
+      margin-top: .75rem;
+    }
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      padding: .38rem .8rem;
+      border-radius: 3px;
+      font-family: var(--mono);
+      font-size: .65rem;
+      font-weight: 500;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all .12s;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+
+    button i { font-size: 13px; }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .btn-primary:hover { background: #5a8fd4; border-color: #5a8fd4; }
+    .btn-primary:disabled { opacity: .3; cursor: not-allowed; pointer-events: none; }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text2);
+      border-color: var(--border2);
+    }
+
+    .btn-ghost:hover { color: var(--text); border-color: var(--accent); background: var(--accent-dim); }
+    .btn-ghost:disabled { opacity: .3; cursor: not-allowed; pointer-events: none; }
+
+    .btn-danger {
+      background: transparent;
+      color: var(--danger);
+      border-color: var(--danger);
+    }
+
+    .btn-danger:hover { background: var(--danger-dim); }
+    .btn-danger:disabled { opacity: .3; cursor: not-allowed; pointer-events: none; }
+
+    /* ── DATA ROWS ──────────────────────────────────────────────────── */
+    .hash-grid { display: flex; flex-direction: column; gap: .4rem; }
+
+    .hash-row {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: .5rem .65rem;
+    }
+
+    .hash-label {
+      font-family: var(--mono);
+      font-size: .55rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: .14em;
+      color: var(--text3);
+      margin-bottom: .18rem;
+    }
+
+    .hash-value {
+      font-family: var(--mono);
+      font-size: .65rem;
+      color: var(--accent);
+      word-break: break-all;
+      line-height: 1.55;
+    }
+
+    .hash-value.verified { color: var(--verified); }
+    .hash-value.warning  { color: var(--warning); }
+    .hash-value.danger   { color: var(--danger); }
+
+    /* ── VERDICT ────────────────────────────────────────────────────── */
+    .verdict {
+      border-radius: 3px;
+      padding: .6rem .85rem;
+      font-family: var(--mono);
+      font-size: .68rem;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      display: none;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    .verdict.clean    { background: var(--verified-dim); border: 1px solid rgba(58,158,110,.25); color: var(--verified); }
+    .verdict.tampered { background: var(--danger-dim);   border: 1px solid rgba(185,64,64,.25);  color: var(--danger); }
+    .verdict.diff     { background: var(--warning-dim);  border: 1px solid rgba(196,136,26,.25); color: var(--warning); }
+
+    /* ── ANNOTATED ──────────────────────────────────────────────────── */
+    .annotated-wrap { border-radius: 3px; overflow: hidden; background: #000; display: none; }
+    .annotated-wrap img { width: 100%; display: block; }
+
+    /* ── CHAIN BADGE ────────────────────────────────────────────────── */
+    .chain-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      font-family: var(--mono);
+      font-size: .58rem;
+      padding: 2px 7px;
+      border-radius: 2px;
+    }
+
+    .chain-badge.mock { background: rgba(42,52,72,.3);   color: var(--text2);    border: 1px solid var(--border2); }
+    .chain-badge.live { background: var(--verified-dim); color: var(--verified); border: 1px solid rgba(58,158,110,.25); }
+    .chain-badge.err  { background: var(--danger-dim);   color: var(--danger);   border: 1px solid rgba(185,64,64,.25); }
+
+    /* ── MERKLE ─────────────────────────────────────────────────────── */
+    .merkle-vis { overflow-x: auto; padding: .4rem 0; }
+
+    .merkle-layer {
+      display: flex;
+      justify-content: center;
+      gap: .2rem;
+      margin-bottom: .2rem;
+    }
+
+    .merkle-node {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 2px 5px;
+      font-family: var(--mono);
+      font-size: .54rem;
+      color: var(--text3);
+      white-space: nowrap;
+      transition: color .15s;
+    }
+
+    .merkle-node.root { border-color: var(--accent); color: var(--accent); }
+
+    /* ── SESSION BAR ────────────────────────────────────────────────── */
+    .session-bar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: .6rem .85rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: .75rem;
+    }
+
+    .session-stats { display: flex; gap: 1.5rem; }
+
+    .stat { display: flex; flex-direction: column; gap: .1rem; }
+
+    .stat-label {
+      font-family: var(--mono);
+      font-size: .52rem;
+      letter-spacing: .12em;
+      color: var(--text3);
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      font-family: var(--mono);
+      font-size: .82rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    /* ── CHAIN LOG ──────────────────────────────────────────────────── */
+    .chain-log {
+      background: #050709;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: .55rem .65rem;
+      height: 155px;
+      overflow-y: auto;
+      font-family: var(--mono);
+      font-size: .62rem;
+      color: var(--text3);
+      line-height: 1.65;
+    }
+
+    .chain-log::-webkit-scrollbar { width: 2px; }
+    .chain-log::-webkit-scrollbar-track { background: transparent; }
+    .chain-log::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 1px; }
+
+    .chain-log .entry {
+      padding: 1px 0;
+      border-bottom: 1px solid rgba(255,255,255,.015);
+    }
+
+    .chain-log .entry .ts { color: var(--text2); opacity: .6; }
+
+    /* ── SPINNER ────────────────────────────────────────────────────── */
+    .spinner {
+      width: 13px; height: 13px;
+      border: 1.5px solid rgba(74,127,193,.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .75s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── EMPTY ──────────────────────────────────────────────────────── */
+    .empty {
+      text-align: center;
+      padding: 1.75rem 1rem;
+      color: var(--text3);
+      font-family: var(--mono);
+      font-size: .62rem;
+      letter-spacing: .05em;
+    }
+
+    .empty i { font-size: 1.5rem; display: block; margin-bottom: .4rem; opacity: .3; }
+
+    /* ── INPUTS ─────────────────────────────────────────────────────── */
+    input[type="text"] {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 3px;
+      color: var(--text);
+      padding: .45rem .65rem;
+      font-family: var(--mono);
+      font-size: .65rem;
+      width: 100%;
+      outline: none;
+      letter-spacing: .03em;
+      transition: border-color .12s;
+    }
+
+    input[type="text"]:focus { border-color: var(--accent); }
+    input[type="text"]::placeholder { color: var(--text3); }
+
+    input[type="file"] {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 3px;
+      color: var(--text2);
+      padding: .45rem .65rem;
+      font-family: var(--mono);
+      font-size: .62rem;
+      width: 100%;
+      cursor: pointer;
+      transition: border-color .12s;
+    }
+
+    input[type="file"]:hover { border-color: var(--accent); }
+
+    /* ── SECTION LABEL ──────────────────────────────────────────────── */
+    .section-label {
+      font-family: var(--mono);
+      font-size: .55rem;
+      font-weight: 500;
+      letter-spacing: .15em;
+      color: var(--text3);
+      text-transform: uppercase;
+      margin-bottom: .35rem;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+    }
+
+    /* ── TILE GRID ──────────────────────────────────────────────────── */
+    .tile-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 2px;
+      margin-top: .4rem;
+    }
+
+    .tile-cell {
+      aspect-ratio: 1;
+      border-radius: 1px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      transition: background .15s;
+    }
+
+    .tile-cell.changed { background: rgba(185,64,64,.25); border-color: rgba(185,64,64,.4); }
+    .tile-cell.clean   { background: rgba(58,158,110,.08); border-color: rgba(58,158,110,.2); }
+
+    /* ── AUTH BLOCKS ────────────────────────────────────────────────── */
+    .auth-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      padding: .45rem .85rem;
+      border-radius: 3px;
+      font-family: var(--mono);
+      font-size: .65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: .65rem;
+    }
+
+    .auth-badge.authentic { background: var(--verified-dim); border: 1px solid rgba(58,158,110,.25); color: var(--verified); }
+    .auth-badge.not-found { background: var(--danger-dim);   border: 1px solid rgba(185,64,64,.25);  color: var(--danger); }
+
+    .auth-match {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: .55rem .65rem;
+      margin-bottom: .4rem;
+      font-family: var(--mono);
+      font-size: .62rem;
+      line-height: 1.65;
+    }
+
+    .auth-match.sha256  { border-left: 2px solid var(--verified); }
+    .auth-match.phash   { border-left: 2px solid var(--accent); }
+    .auth-match.similar { border-left: 2px solid var(--warning); }
+
+    /* ── SCROLLBAR ──────────────────────────────────────────────────── */
+    .content::-webkit-scrollbar { width: 3px; }
+    .content::-webkit-scrollbar-track { background: transparent; }
+    .content::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 1px; }
+
+    /* ── FOOTER ─────────────────────────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: .6rem;
+      font-family: var(--mono);
+      font-size: .56rem;
+      letter-spacing: .1em;
+      color: var(--text3);
+      border-top: 1px solid var(--border);
+      text-transform: uppercase;
+    }
+
+    /* ── UTILITY ────────────────────────────────────────────────────── */
+    .hint {
+      font-family: var(--mono);
+      font-size: .58rem;
+      color: var(--text3);
+      margin-top: .28rem;
+      line-height: 1.6;
+    }
+
+    /* ── RESPONSIVE ─────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .app-body { flex-direction: column; }
+      .sidebar {
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: .4rem;
+        gap: .2rem;
+      }
+      .sidebar-group-label, .nav-divider, .sidebar-footer { display: none; }
+      .nav-item { border-left: none; border-bottom: 2px solid transparent; width: auto; padding: .38rem .65rem; font-size: .75rem; }
+      .nav-item.active { border-bottom-color: var(--accent); border-left-color: transparent; }
+      .tab-panel.active { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── HEADER ────────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <div class="logo-mark">
+      <i class="ti ti-link" aria-hidden="true"></i>
+    </div>
+    <div class="logo-wordmark">
+      <div class="logo-name">Frame Fingerprinting </div>
+       
+    </div>
+  </div>
+  <div class="header-right">
+     
+    <div id="api-status">
+      <div class="status-indicator" id="status-dot"></div>
+      <span id="status-text">Connecting</span>
+    </div>
+  </div>
+</header>
+
+<!-- ── APP BODY ──────────────────────────────────────────────────────── -->
+<div class="app-body">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-group-label">Capture</div>
+
+    <button class="nav-item active" data-tab="snapshot">
+      <i class="ti ti-camera" aria-hidden="true"></i> Snapshot
+    </button>
+    <button class="nav-item" data-tab="verify">
+      <i class="ti ti-shield-check" aria-hidden="true"></i> Verify
+    </button>
+
+    <div class="nav-divider"></div>
+
+    <div class="sidebar-group-label">Streaming</div>
+
+    <button class="nav-item" data-tab="video">
+      <i class="ti ti-video" aria-hidden="true"></i> Video Session
+    </button>
+    <button class="nav-item" data-tab="live">
+      <i class="ti ti-bolt" aria-hidden="true"></i> Live WebSocket
+    </button>
+
+    <div class="sidebar-footer">
+      No files on disk<br>
+      Zero disk persistence
+    </div>
+  </nav>
+
+  <!-- CONTENT -->
+  <main class="content">
+
+    <!-- ── SNAPSHOT ─────────────────────────────────────────────────── -->
+    <div class="tab-panel active" id="tab-snapshot">
+
+      <div class="card">
+        <div class="card-title">
+          <i class="ti ti-camera" aria-hidden="true"></i> Camera Input
+        </div>
+        <div class="camera-wrap" id="snap-cam-wrap">
+          <video id="snap-video" autoplay muted playsinline></video>
+          <canvas class="preview" id="snap-canvas"></canvas>
+          <div class="rec-badge" id="snap-live">REC</div>
+          <div class="cam-coords" id="snap-coords">640×480 · MJPEG</div>
+          <div class="cam-overlay" id="snap-cam-overlay">
+            <i class="ti ti-camera-off" aria-hidden="true"></i>
+            <span>Start camera to begin</span>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="btn-snap-start">
+            <i class="ti ti-player-play"></i> Start
+          </button>
+          <button class="btn-ghost" id="btn-snap-capture" disabled>
+            <i class="ti ti-camera"></i> Capture
+          </button>
+          <button class="btn-ghost" id="btn-snap-download" disabled>
+            <i class="ti ti-download"></i> Export
+          </button>
+          <button class="btn-ghost" id="btn-snap-clear" disabled>
+            <i class="ti ti-x"></i> Clear
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <i class="ti ti-fingerprint" aria-hidden="true"></i> Frame Fingerprint
+        </div>
+        <div id="snap-results">
+          <div class="empty">
+            <i class="ti ti-fingerprint"></i>
+            Capture a frame to generate fingerprints
+          </div>
+        </div>
+      </div>
+
+      <div class="card col-full" id="snap-merkle-card" style="display:none">
+        <div class="card-title">
+          <i class="ti ti-tournament" aria-hidden="true"></i> Merkle Tree
+        </div>
+        <div class="merkle-vis" id="snap-merkle-vis"></div>
+      </div>
+
+    </div>
+
+    <!-- ── VERIFY ────────────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-verify">
+
+      <div class="card">
+        <div class="card-title">
+          <i class="ti ti-camera" aria-hidden="true"></i> Suspect Frame
+        </div>
+        <div class="camera-wrap" id="ver-cam-wrap">
+          <video id="ver-video" autoplay muted playsinline></video>
+          <canvas class="preview" id="ver-canvas"></canvas>
+          <div class="rec-badge" id="ver-live">LIVE</div>
+          <div class="cam-overlay" id="ver-cam-overlay">
+            <i class="ti ti-shield-check" aria-hidden="true"></i>
+            <span>Start camera or upload a JPG</span>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="btn-ver-start">
+            <i class="ti ti-player-play"></i> Start
+          </button>
+          <button class="btn-ghost" id="btn-ver-capture" disabled>
+            <i class="ti ti-camera"></i> Capture
+          </button>
+        </div>
+        <div style="margin-top:.8rem">
+          <div class="section-label">Upload Saved JPG</div>
+          <input type="file" id="ver-upload" accept="image/jpeg,image/png,image/webp" />
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <i class="ti ti-search" aria-hidden="true"></i> Search Hash Database
+        </div>
+        <div style="margin-bottom:.7rem">
+          <div class="section-label">Search Query</div>
+          <input type="text" id="search-query"
+            placeholder="Enter SHA256, pHash, or leave empty to browse all…" />
+          <div class="hint">Enter a 64-char SHA256 hash or 16-char pHash to search. Leave empty to see all stored hashes.</div>
+        </div>
+        <button class="btn-primary" id="btn-search" style="width:100%;justify-content:center;padding:.55rem">
+          <i class="ti ti-search"></i> Search
+        </button>
+        <div id="search-results" style="margin-top:.85rem"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <i class="ti ti-video" aria-hidden="true"></i> Search Video File
+        </div>
+        <div style="margin-bottom:.7rem">
+          <div class="section-label">Upload Video File</div>
+          <input type="file" id="video-search-upload" accept="video/mp4,video/webm,video/avi,video/quicktime" />
+          <div class="hint">Upload MP4, WebM, AVI, or MOV. System will extract frames, search database, and verify on Polygon.</div>
+        </div>
+        <div style="margin-bottom:.7rem">
+          <div class="section-label">Frame Interval</div>
+          <input type="number" id="video-frame-interval" value="10" min="1" max="100" 
+            style="width:100%;padding:.45rem .65rem;background:var(--surface);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:.65rem" />
+          <div class="hint">Extract every Nth frame (e.g., 10 = every 10th frame). Lower = more frames, slower processing.</div>
+        </div>
+        <button class="btn-primary" id="btn-video-search" style="width:100%;justify-content:center;padding:.55rem" disabled>
+          <i class="ti ti-search"></i> Search Video
+        </button>
+        <div id="video-search-results" style="margin-top:.85rem"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <i class="ti ti-settings-2" aria-hidden="true"></i> Verification Engine
+        </div>
+
+        <div style="margin-bottom:.7rem">
+          <div class="section-label">Original SHA256 (Optional)</div>
+          <input type="text" id="original-sha"
+            placeholder="Leave empty for database check only, or paste SHA256 to compare against a specific original…" />
+          <div class="hint">Without SHA256: checks if this image exists in the database. With SHA256: compares against specific original.</div>
+        </div>
+
+        <button class="btn-primary" id="btn-verify" disabled
+          style="width:100%;justify-content:center;padding:.55rem">
+          <i class="ti ti-shield-check"></i> Verify Image
+        </button>
+
+        <div style="margin-top:.85rem">
+          <div class="verdict" id="ver-verdict"></div>
+        </div>
+
+        <div id="ver-results" style="margin-top:.7rem"></div>
+      </div>
+
+      <div class="card col-full" id="ver-auth-card" style="display:none">
+        <div class="card-title">
+          <i class="ti ti-database-check" aria-hidden="true"></i> Database Authentication
+        </div>
+        <div id="ver-auth-results" style="margin-top:.7rem"></div>
+      </div>
+
+      <div class="card col-full" id="ver-annotated-card" style="display:none">
+        <div class="card-title">
+          <i class="ti ti-adjustments-alt" aria-hidden="true"></i> Tamper Overlay
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.85rem;align-items:start">
+          <div>
+            <div class="section-label">Annotated Frame</div>
+            <div class="annotated-wrap" id="ver-annotated-wrap">
+              <img id="ver-annotated-img" src="" alt="Annotated frame" />
+            </div>
+          </div>
+          <div>
+            <div class="section-label">Tile Map (8×8)</div>
+            <div class="tile-grid" id="ver-tile-grid"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── VIDEO SESSION ─────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-video">
+
+      <div class="card">
+        <div class="card-title">
+          <i class="ti ti-video" aria-hidden="true"></i> Video Camera
+        </div>
+        <div class="camera-wrap" id="vid-cam-wrap">
+          <video id="vid-video" autoplay muted playsinline></video>
+          <canvas class="preview" id="vid-canvas"></canvas>
+          <div class="rec-badge" id="vid-live">REC</div>
+          <div class="cam-overlay" id="vid-cam-overlay">
+            <i class="ti ti-video-off" aria-hidden="true"></i>
+            <span>Start a session to begin recording</span>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="btn-vid-start">
+            <i class="ti ti-player-play"></i> Start Session
+          </button>
+          <button class="btn-danger" id="btn-vid-end" disabled>
+            <i class="ti ti-player-stop"></i> End Session
+          </button>
+          <button class="btn-ghost" id="btn-vid-snap" disabled>
+            <i class="ti ti-camera"></i> Capture
+          </button>
+          <button class="btn-ghost" id="btn-vid-download" disabled>
+            <i class="ti ti-download"></i> Download JPG
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <i class="ti ti-chart-line" aria-hidden="true"></i> Session Monitor
+        </div>
+
+        <div class="session-bar">
+          <div class="session-stats">
+            <div class="stat">
+              <div class="stat-label">Session ID</div>
+              <div class="stat-value" id="stat-session-id">—</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Frames</div>
+              <div class="stat-value" id="stat-frames">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Status</div>
+              <div class="stat-value" id="stat-status">Idle</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-label">Chain Log</div>
+        <div class="chain-log" id="vid-chain-log">
+          <div class="entry">Waiting for session…</div>
+        </div>
+
+        <div id="vid-end-results" style="margin-top:.75rem"></div>
+
+        <div id="vid-export-row" style="display:none;margin-top:.85rem;border-top:1px solid var(--border);padding-top:.85rem">
+          <div class="section-label" style="margin-bottom:.55rem">
+            <i class="ti ti-download" style="font-size:12px;color:var(--accent)" aria-hidden="true"></i>
+            Export Session
+          </div>
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">
+            <button class="btn-ghost" id="btn-vid-export-json">
+              <i class="ti ti-file-type-json"></i> JSON
+            </button>
+            <button class="btn-ghost" id="btn-vid-export-csv">
+              <i class="ti ti-file-type-csv"></i> CSV
+            </button>
+            <button class="btn-ghost" id="btn-vid-export-mp4">
+              <i class="ti ti-video-plus"></i> Download Video
+            </button>
+            <span style="font-family:var(--mono);font-size:.57rem;color:var(--text3);margin-left:.2rem" id="vid-export-hint">
+              Session metadata + all frame hashes
+            </span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── LIVE WS ────────────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-live">
+
+      <div class="card">
+        <div class="card-title">
+          <i class="ti ti-bolt" aria-hidden="true"></i> Live Stream
+        </div>
+        <div class="camera-wrap" id="ws-cam-wrap">
+          <video id="ws-video" autoplay muted playsinline></video>
+          <div class="rec-badge" id="ws-live">WS</div>
+          <div class="cam-overlay" id="ws-cam-overlay">
+            <i class="ti ti-wifi-off" aria-hidden="true"></i>
+            <span>Connect WebSocket to start streaming</span>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="btn-ws-connect">
+            <i class="ti ti-plug-connected"></i> Connect
+          </button>
+          <button class="btn-danger" id="btn-ws-disconnect" disabled>
+            <i class="ti ti-plug-connected-x"></i> Disconnect
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <i class="ti ti-antenna" aria-hidden="true"></i> Live Fingerprints
+        </div>
+
+        <div class="session-bar">
+          <div class="session-stats">
+            <div class="stat">
+              <div class="stat-label">Frames/s</div>
+              <div class="stat-value" id="ws-fps">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Total</div>
+              <div class="stat-value" id="ws-total">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">WS State</div>
+              <div class="stat-value" id="ws-state">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-label">Event Log</div>
+        <div class="chain-log" id="ws-log">
+          <div class="entry">Waiting for connection…</div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+ 
+
+<script>
+  const API = 'http://localhost:8000';
+
+  let snapStream = null, verStream = null, vidStream = null, wsStream = null;
+  let snapSha256 = null;
+  let snapCaptureB64 = null;
+  let vidSessionId = null;
+  let vidFrameTimer = null;
+  let vidFrameLog  = [];
+  let vidSessionMeta = null;
+  let vidEndData   = null;
+  let mediaRecorder = null;
+  let vidRecordedChunks = [];
+  let vidRecordedBlob = null;
+  let socket = null;
+  let wsFrameTimer = null;
+  let wsFpsCounter = 0, wsTotal = 0;
+
+  /* ── Health check ─────────────────────────────────────────────────── */
+  async function checkHealth() {
+    const dot  = document.getElementById('status-dot');
+    const text = document.getElementById('status-text');
+    try {
+      const r = await fetch(`${API}/health`);
+      if (r.ok) {
+        dot.className    = 'status-indicator online';
+        text.textContent = 'API Online';
+      } else { throw new Error(); }
+    } catch {
+      dot.className    = 'status-indicator offline';
+      text.textContent = 'API Offline';
+    }
+  }
+  checkHealth();
+  setInterval(checkHealth, 10000);
+
+  /* ── Tabs ─────────────────────────────────────────────────────────── */
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  /* ── Camera helpers ───────────────────────────────────────────────── */
+  async function startCamera(videoEl, overlayEl, liveEl, coordsEl) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: 'user' }, audio: false,
+      });
+      videoEl.srcObject = stream;
+      overlayEl.style.display = 'none';
+      liveEl.style.display    = 'block';
+      if (coordsEl) coordsEl.style.display = 'block';
+      return stream;
+    } catch(e) {
+      overlayEl.innerHTML = `<i class="ti ti-camera-off"></i><span style="font-family:var(--mono);font-size:.62rem">${e.message}</span>`;
+      return null;
+    }
+  }
+
+  function stopCamera(stream, videoEl, overlayEl, liveEl, coordsEl) {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    videoEl.srcObject = null;
+    overlayEl.style.display = 'flex';
+    liveEl.style.display    = 'none';
+    if (coordsEl) coordsEl.style.display = 'none';
+    return null;
+  }
+
+  function captureFrame(videoEl, canvasEl) {
+    canvasEl.width  = videoEl.videoWidth  || 640;
+    canvasEl.height = videoEl.videoHeight || 480;
+    canvasEl.getContext('2d').drawImage(videoEl, 0, 0);
+    return canvasEl.toDataURL('image/jpeg', 0.92);
+  }
+
+  /* ── File → base64 ────────────────────────────────────────────────── */
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* ── Render helpers ───────────────────────────────────────────────── */
+  function hashRow(label, value, cls = '') {
+    return `<div class="hash-row">
+      <div class="hash-label">${label}</div>
+      <div class="hash-value ${cls}">${value}</div>
+    </div>`;
+  }
+
+  function renderMerkle(tree, containerId) {
+    const vis = document.getElementById(containerId);
+    vis.innerHTML = '';
+    tree.forEach((layer, depth) => {
+      const layerDiv = document.createElement('div');
+      layerDiv.className = 'merkle-layer';
+      layer.forEach(node => {
+        const el = document.createElement('div');
+        el.className = 'merkle-node' + (depth === tree.length - 1 ? ' root' : '');
+        el.textContent = node.slice(0, 8) + '…';
+        el.title = node;
+        layerDiv.appendChild(el);
+      });
+      vis.insertBefore(layerDiv, vis.firstChild);
+    });
+  }
+
+  function renderBlockchain(bc) {
+    if (!bc) return '';
+    const cls   = bc.mock ? 'mock' : bc.anchored ? 'live' : 'err';
+    const label = bc.mock ? 'Mock Mode' : bc.anchored ? `Block ${bc.block_number}` : (bc.reason || bc.error);
+    return `<div class="hash-row">
+      <div class="hash-label">Blockchain</div>
+      <div style="margin-top:.3rem"><span class="chain-badge ${cls}">${label}</span></div>
+      ${bc.tx_hash ? `<div class="hash-value" style="margin-top:.3rem">${bc.tx_hash}</div>` : ''}
+    </div>`;
+  }
+
+  /* ── Tile grid renderer ───────────────────────────────────────────── */
+  function renderTileGrid(changedTiles) {
+    const tileGrid      = document.getElementById('ver-tile-grid');
+    const annotatedCard = document.getElementById('ver-annotated-card');
+    tileGrid.innerHTML  = '';
+    const changed = new Set(changedTiles);
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const key = `${r}_${c}`;
+        const el  = document.createElement('div');
+        el.className = 'tile-cell ' + (changed.has(key) ? 'changed' : 'clean');
+        el.title = key;
+        tileGrid.appendChild(el);
+      }
+    }
+    annotatedCard.style.display = 'block';
+  }
+
+  /* ══════════════════════════════ SNAPSHOT ════════════════════════════*/
+  document.getElementById('btn-snap-start').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-snap-start');
+    if (snapStream) {
+      snapStream = stopCamera(snapStream,
+        document.getElementById('snap-video'),
+        document.getElementById('snap-cam-overlay'),
+        document.getElementById('snap-live'),
+        document.getElementById('snap-coords'));
+      btn.innerHTML = '<i class="ti ti-player-play"></i> Start';
+      document.getElementById('btn-snap-capture').disabled = true;
+      document.getElementById('btn-snap-clear').disabled   = true;
+    } else {
+      snapStream = await startCamera(
+        document.getElementById('snap-video'),
+        document.getElementById('snap-cam-overlay'),
+        document.getElementById('snap-live'),
+        document.getElementById('snap-coords'));
+      if (snapStream) {
+        btn.innerHTML = '<i class="ti ti-player-stop"></i> Stop';
+        document.getElementById('btn-snap-capture').disabled = false;
+        document.getElementById('btn-snap-clear').disabled   = false;
+      }
+    }
+  });
+
+  document.getElementById('btn-snap-capture').addEventListener('click', async () => {
+    snapCaptureB64 = captureFrame(
+      document.getElementById('snap-video'),
+      document.getElementById('snap-canvas'));
+    const results = document.getElementById('snap-results');
+    results.innerHTML = '<div class="empty"><div class="spinner" style="margin:0 auto"></div></div>';
+
+    try {
+      const res  = await fetch(`${API}/snapshot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_b64: snapCaptureB64 }),
+      });
+      const data = await res.json();
+      snapSha256 = data.sha256;
+      document.getElementById('original-sha').value = snapSha256;
+
+      results.innerHTML =
+        hashRow('SHA256 — Exact Identity', data.sha256) +
+        hashRow('pHash — Perceptual', data.phash, 'verified') +
+        hashRow('Merkle Root', data.merkle_root, 'warning') +
+        hashRow('Tile Grid', `${data.tiled.grid} · ${Object.keys(data.tiled.tiles).length} tiles`) +
+        renderBlockchain(data.blockchain);
+
+      document.getElementById('btn-snap-download').disabled = false;
+
+      if (data.merkle_root) {
+        document.getElementById('snap-merkle-card').style.display = 'block';
+        const tiles = Object.keys(data.tiled.tiles).sort().map(k => data.tiled.tiles[k]);
+        renderMerkle([[data.merkle_root], tiles.slice(0, 8)], 'snap-merkle-vis');
+      }
+    } catch(e) {
+      results.innerHTML = `<div class="empty" style="color:var(--danger)">Error: ${e.message}</div>`;
+    }
+  });
+
+  document.getElementById('btn-snap-download').addEventListener('click', () => {
+    if (!snapCaptureB64) return;
+    const link = document.createElement('a');
+    link.href = snapCaptureB64;
+    link.download = `capture-${new Date().toISOString().slice(0,19).replace(/[:-]/g,'')}.jpg`;
+    link.click();
+  });
+
+  document.getElementById('btn-snap-clear').addEventListener('click', () => {
+    document.getElementById('snap-canvas').style.display = 'none';
+    document.getElementById('snap-results').innerHTML =
+      '<div class="empty"><i class="ti ti-fingerprint"></i>Capture a frame to generate fingerprints</div>';
+    document.getElementById('snap-merkle-card').style.display = 'none';
+    snapSha256 = null;
+    snapCaptureB64 = null;
+    document.getElementById('btn-snap-download').disabled = true;
+  });
+
+  /* ══════════════════════════════ VERIFY ══════════════════════════════*/
+
+  /* ── Helper: show a frame preview in the verify camera wrap ────────── */
+  function showVerifyPreview(canvas) {
+    const overlay = document.getElementById('ver-cam-overlay');
+    const video   = document.getElementById('ver-video');
+    canvas.style.display  = 'block';
+    canvas.style.zIndex   = '5';   /* sit above overlay (z-index 3) and scanline (z-index 2) */
+    overlay.style.display = 'none';
+    video.style.visibility = 'hidden';
+  }
+
+  function resetVerifyPreview() {
+    const canvas  = document.getElementById('ver-canvas');
+    const overlay = document.getElementById('ver-cam-overlay');
+    const video   = document.getElementById('ver-video');
+    canvas.style.display   = 'none';
+    canvas.style.zIndex    = '';
+    overlay.style.display  = 'flex';
+    video.style.visibility = 'visible';
+  }
+
+  document.getElementById('btn-ver-start').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-ver-start');
+    if (verStream) {
+      verStream = stopCamera(verStream,
+        document.getElementById('ver-video'),
+        document.getElementById('ver-cam-overlay'),
+        document.getElementById('ver-live'));
+      btn.innerHTML = '<i class="ti ti-player-play"></i> Start';
+      document.getElementById('btn-ver-capture').disabled = true;
+      document.getElementById('btn-verify').disabled      = true;
+      /* Clear any frozen preview so overlay shows cleanly */
+      resetVerifyPreview();
+    } else {
+      verStream = await startCamera(
+        document.getElementById('ver-video'),
+        document.getElementById('ver-cam-overlay'),
+        document.getElementById('ver-live'));
+      if (verStream) {
+        btn.innerHTML = '<i class="ti ti-player-stop"></i> Stop';
+        document.getElementById('btn-ver-capture').disabled = false;
+        document.getElementById('btn-verify').disabled      = false;
+        /* Hide any stale uploaded preview so live feed is visible */
+        const canvas = document.getElementById('ver-canvas');
+        canvas.style.display = 'none';
+        canvas.style.zIndex  = '';
+        document.getElementById('ver-video').style.visibility = 'visible';
+      }
+    }
+  });
+
+  let verCapture = null;
+  let verUploadedFile = null;
+
+  /* ── Capture from live camera ──────────────────────────────────────── */
+  document.getElementById('btn-ver-capture').addEventListener('click', () => {
+    const canvas = document.getElementById('ver-canvas');
+    verCapture = captureFrame(document.getElementById('ver-video'), canvas);
+    verUploadedFile = null;
+    document.getElementById('ver-upload').value = '';
+    showVerifyPreview(canvas);
+    document.getElementById('btn-verify').disabled = false;
+  });
+
+  /* ── Upload a saved image file ─────────────────────────────────────── */
+  document.getElementById('ver-upload').addEventListener('change', e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    verUploadedFile = file;
+    verCapture = null;
+
+    /* Draw the uploaded image into the preview canvas */
+    const canvas = document.getElementById('ver-canvas');
+    const img    = new Image();
+    const url    = URL.createObjectURL(file);
+    img.onload = () => {
+      canvas.width  = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      showVerifyPreview(canvas);
+    };
+    img.src = url;
+
+    document.getElementById('btn-verify').disabled = false;
+  });
+
+  document.getElementById('btn-verify').addEventListener('click', async () => {
+    const sha = document.getElementById('original-sha').value.trim();
+    if (!verCapture && !verUploadedFile) return alert('Capture a frame or upload a JPG first');
+
+    const results     = document.getElementById('ver-results');
+    const verdict     = document.getElementById('ver-verdict');
+    const authCard    = document.getElementById('ver-auth-card');
+    const authResults = document.getElementById('ver-auth-results');
+
+    // Reset state
+    verdict.style.display = 'none';
+    results.innerHTML     = '<div class="empty"><div class="spinner" style="margin:0 auto"></div></div>';
+    authCard.style.display = 'none';
+    document.getElementById('ver-tile-grid').innerHTML = '';
+
+    // Always show the submitted frame immediately in the annotated panel.
+    // The backend's annotated overlay (if returned) will replace it below.
+    const annotatedImg  = document.getElementById('ver-annotated-img');
+    const annotatedWrap = document.getElementById('ver-annotated-wrap');
+    const annotatedCard = document.getElementById('ver-annotated-card');
+    if (verCapture) {
+      annotatedImg.src          = verCapture;
+      annotatedWrap.style.display = 'block';
+      annotatedCard.style.display = 'block';
+    } else if (verUploadedFile) {
+      const previewUrl = URL.createObjectURL(verUploadedFile);
+      annotatedImg.onload = () => URL.revokeObjectURL(previewUrl);
+      annotatedImg.src          = previewUrl;
+      annotatedWrap.style.display = 'block';
+      annotatedCard.style.display = 'block';
+    }
+
+    try {
+      /* ── MODE 1: Compare against a specific original (SHA256 provided) ── */
+      if (sha) {
+        let res;
+        if (verUploadedFile) {
+          const formData = new FormData();
+          formData.append('file', verUploadedFile);
+          formData.append('original_sha256', sha);
+          res = await fetch(`${API}/verify/upload`, { method: 'POST', body: formData });
+        } else {
+          res = await fetch(`${API}/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image_b64: verCapture, original_sha256: sha }),
+          });
+        }
+        const data = await res.json();
+
+        // Verdict banner
+        verdict.style.display = 'flex';
+        verdict.textContent   = data.verdict || '';
+        if (data.exact_match || (!data.tamper?.tampered && data.visually_similar)) {
+          verdict.className = 'verdict clean';
+        } else if (data.tamper?.tampered) {
+          verdict.className = 'verdict tampered';
+        } else {
+          verdict.className = 'verdict diff';
+        }
+
+        // Hash rows
+        results.innerHTML =
+          hashRow('Exact Match', data.exact_match ? 'Yes' : 'No', data.exact_match ? 'verified' : 'danger') +
+          hashRow('Hamming Distance',
+            `${data.hamming_distance} bits · ${data.visually_similar ? 'Similar' : 'Different'}`,
+            data.visually_similar ? 'verified' : 'warning') +
+          hashRow('Changed Tiles',
+            `${data.tamper?.changed_tiles?.length || 0} / 64  (${data.tamper?.change_pct}%)`,
+            data.tamper?.tampered ? 'danger' : 'verified') +
+          hashRow('Likely Region', data.tamper?.likely_region || 'none');
+
+        // If backend returns an annotated overlay, replace the fallback preview with it
+        if (data.annotated_image) {
+          annotatedImg.src = data.annotated_image;
+        }
+
+        // Tile grid — show card whenever tile data exists
+        if (data.tamper?.changed_tiles) {
+          renderTileGrid(data.tamper.changed_tiles);
+        }
+      }
+
+      /* ── MODE 2: Database authenticity check (always runs) ─────────── */
+      try {
+        let imageData = verCapture;
+        if (!imageData && verUploadedFile) {
+          imageData = await fileToBase64(verUploadedFile);
+        }
+
+        const authRes = await fetch(`${API}/verify/check-database`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image_b64:      imageData || '',
+            original_sha256: sha || '',
+          }),
+        });
+        const authData = await authRes.json();
+        authCard.style.display = 'block';
+
+        let authHTML = authData.is_authentic
+          ? '<div class="auth-badge authentic"><i class="ti ti-circle-check" style="font-size:14px"></i> Authentic — Found in Database</div>'
+          : '<div class="auth-badge not-found"><i class="ti ti-circle-x" style="font-size:14px"></i> Not Found — Unknown or New Image</div>';
+
+        if (authData.exact_sha256_match) {
+          authHTML += '<div class="auth-match sha256">' +
+            '<strong>Exact SHA256 Match</strong><br>' +
+            `SHA256: ${authData.exact_sha256_match.sha256.slice(0, 12)}…<br>` +
+            `Captured: ${new Date(authData.exact_sha256_match.captured_at * 1000).toLocaleString()}<br>` +
+            `Type: ${authData.exact_sha256_match.capture_type || 'unknown'}`;
+          if (authData.exact_sha256_match.blockchain_tx_hash) {
+            authHTML += `<br>On-Chain: ${authData.exact_sha256_match.blockchain_tx_hash.slice(0, 16)}…`;
+          }
+          authHTML += '</div>';
+        }
+
+        if (authData.exact_phash_matches?.length > 0) {
+          authHTML += '<div class="auth-match phash"><strong>Exact pHash Matches</strong><br>' +
+            `${authData.exact_phash_matches.length} identical image(s) found<br>`;
+          authData.exact_phash_matches.slice(0, 2).forEach(m => {
+            authHTML += `· ${m.sha256.slice(0, 12)}… (${m.capture_type})<br>`;
+          });
+          if (authData.exact_phash_matches.length > 2)
+            authHTML += `+${authData.exact_phash_matches.length - 2} more<br>`;
+          authHTML += '</div>';
+        }
+
+        if (authData.similar_hashes?.length > 0) {
+          authHTML += '<div class="auth-match similar"><strong>Similar Images Found</strong><br>' +
+            `${authData.similar_hashes.length} visually similar image(s)<br>`;
+          authData.similar_hashes.slice(0, 2).forEach(m => {
+            authHTML += `· Distance: ${m.hamming_distance} bits (${m.capture_type})<br>`;
+          });
+          if (authData.similar_hashes.length > 2)
+            authHTML += `+${authData.similar_hashes.length - 2} more<br>`;
+          authHTML += '</div>';
+        }
+
+        authHTML += `<div style="margin-top:.65rem;padding:.5rem .65rem;background:var(--surface);border-radius:3px;font-size:.58rem;color:var(--text3)">` +
+          `Searched ${authData.database_count} records</div>`;
+
+        authResults.innerHTML = authHTML;
+
+        if (authData.tamper?.changed_tiles) {
+          renderTileGrid(authData.tamper.changed_tiles);
+        }
+
+      } catch(authErr) {
+        console.error('Database check error:', authErr);
+        authResults.innerHTML = `<div class="empty" style="color:var(--text3)">Database check unavailable</div>`;
+        authCard.style.display = 'block';
+      }
+
+    } catch(e) {
+      results.innerHTML = `<div class="empty" style="color:var(--danger)">Error: ${e.message}</div>`;
+    }
+  });
+
+  /* ── Search Hash Database ──────────────────────────────────────────── */
+  document.getElementById('btn-search').addEventListener('click', async () => {
+    const query = document.getElementById('search-query').value.trim();
+    const resultsDiv = document.getElementById('search-results');
+    const btn = document.getElementById('btn-search');
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader"></i> Searching…';
+    resultsDiv.innerHTML = '';
+    
+    try {
+      const res = await fetch(`${API}/search/hashes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query, limit: 20 }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.total_matches === 0) {
+        resultsDiv.innerHTML = `<div class="empty" style="color:var(--text3)">
+          <i class="ti ti-search"></i>
+          No matches found. ${data.total_in_database} records in database.
+        </div>`;
+      } else {
+        let html = `<div style="margin-bottom:.65rem">
+          <div style="font-family:var(--mono);font-size:.62rem;color:var(--text3);margin-bottom:.4rem">
+            Found ${data.total_matches} match(es) of ${data.total_in_database} total
+          </div>`;
+        
+        data.results.forEach((result, idx) => {
+          const captured = result.captured_at ? new Date(result.captured_at * 1000).toLocaleString() : 'unknown';
+          const bcStatus = result.blockchain_verified ? '✓ On-chain' : result.blockchain_anchored_at ? 'Anchored' : '—';
+          
+          html += `<div class="auth-match sha256" style="cursor:pointer;transition:all .15s;margin-bottom:.4rem" 
+                    onclick="document.getElementById('original-sha').value='${result.sha256}'; document.getElementById('search-query').value=''">
+            <strong>${result.sha256.slice(0, 16)}…</strong><br>
+            Type: ${result.capture_type || 'unknown'} · Captured: ${captured}<br>
+            Merkle: ${result.merkle_root ? result.merkle_root.slice(0, 12) + '…' : '—'} · Chain: ${bcStatus}
+            <div style="margin-top:.35rem;font-size:.57rem;color:var(--text3)">
+              Click to use as comparison original
+            </div>
+          </div>`;
+        });
+        
+        html += '</div>';
+        resultsDiv.innerHTML = html;
+      }
+    } catch(e) {
+      resultsDiv.innerHTML = `<div class="empty" style="color:var(--danger)">
+        Error: ${e.message}
+      </div>`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-search"></i> Search';
+    }
+  });
+  
+  /* Allow Enter key to trigger search */
+  document.getElementById('search-query').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      document.getElementById('btn-search').click();
+    }
+  });
+
+  /* ── Video File Search ─────────────────────────────────────────────── */
+  document.getElementById('video-search-upload').addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    document.getElementById('btn-video-search').disabled = !file;
+  });
+
+  document.getElementById('btn-video-search').addEventListener('click', async () => {
+    const fileInput = document.getElementById('video-search-upload');
+    const file = fileInput.files?.[0];
+    const frameInterval = parseInt(document.getElementById('video-frame-interval').value) || 10;
+    const resultsDiv = document.getElementById('video-search-results');
+    const btn = document.getElementById('btn-video-search');
+    
+    if (!file) return;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader"></i> Processing Video…';
+    resultsDiv.innerHTML = '';
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('frame_interval', frameInterval);
+      
+      const res = await fetch(`${API}/search/video`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        resultsDiv.innerHTML = `<div class="empty" style="color:var(--danger)">
+          Error: ${data.detail || 'Unknown error'}
+        </div>`;
+        return;
+      }
+      
+      // Build results HTML
+      let html = `<div style="margin-bottom:.85rem">
+        <div style="font-family:var(--mono);font-size:.65rem;color:var(--text3);background:var(--surface);padding:.65rem;border-radius:3px;margin-bottom:.85rem">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+            <div>
+              <div style="color:var(--text2);margin-bottom:.2rem">Video Info</div>
+              Total Frames: <strong>${data.video_info.total_frames}</strong><br>
+              Extracted: <strong>${data.video_info.extracted_frames}</strong><br>
+              FPS: <strong>${data.video_info.fps.toFixed(1)}</strong>
+            </div>
+            <div>
+              <div style="color:var(--text2);margin-bottom:.2rem">Search Summary</div>
+              Matches Found: <strong style="color:var(--verified)">${data.summary.frames_with_matches}</strong><br>
+              On Blockchain: <strong style="color:var(--accent)">${data.summary.frames_on_blockchain}</strong><br>
+              Similar: <strong>${data.summary.total_similar_matches}</strong>
+            </div>
+          </div>
+        </div>`;
+      
+      if (data.frame_results.length === 0) {
+        html += `<div class="empty">No frames to display</div>`;
+      } else {
+        data.frame_results.forEach((frame, idx) => {
+          const timestamp = frame.timestamp.toFixed(2);
+          const exactMatch = frame.exact_match;
+          const hasBlockchain = frame.blockchain_status && frame.blockchain_status.verified;
+          
+          html += `<div class="auth-match sha256" style="margin-bottom:.65rem">
+            <strong>Frame #${frame.frame_number}</strong> @ ${timestamp}s<br>
+            SHA256: ${frame.sha256.slice(0, 16)}…<br>`;
+          
+          if (exactMatch) {
+            html += `<div style="margin-top:.35rem;padding:.4rem;background:var(--surface);border-left:2px solid var(--verified);border-radius:2px">
+              ✓ <strong>Exact Match</strong><br>
+              Captured: ${new Date(exactMatch.captured_at * 1000).toLocaleString()}<br>
+              Type: ${exactMatch.capture_type || 'unknown'}`;
+            
+            if (hasBlockchain) {
+              html += `<br><span style="color:var(--accent)">✓ Verified on Polygon</span>`;
+            }
+            html += `</div>`;
+          }
+          
+          if (frame.similar_matches.length > 0) {
+            html += `<div style="margin-top:.35rem;padding:.4rem;background:var(--surface);border-left:2px solid var(--warning);border-radius:2px">
+              <strong>${frame.similar_matches.length} Similar Match(es)</strong><br>`;
+            frame.similar_matches.slice(0, 2).forEach(m => {
+              html += `· Distance: ${m.hamming_distance} bits (${m.capture_type})<br>`;
+            });
+            if (frame.similar_matches.length > 2) {
+              html += `+${frame.similar_matches.length - 2} more matches<br>`;
+            }
+            html += `</div>`;
+          }
+          
+          if (!frame.found_in_database) {
+            html += `<div style="margin-top:.35rem;padding:.4rem;background:var(--surface);border-left:2px solid var(--text3);border-radius:2px">
+              ℹ No matches found for this frame
+            </div>`;
+          }
+          
+          html += `</div>`;
+        });
+      }
+      
+      html += `<div style="margin-top:.85rem;padding:.5rem .65rem;background:var(--surface);border-radius:3px;font-size:.58rem;color:var(--text3)">
+        Database contains ${data.total_database_records} total records
+      </div>`;
+      
+      resultsDiv.innerHTML = html;
+    } catch(e) {
+      resultsDiv.innerHTML = `<div class="empty" style="color:var(--danger)">
+        Error: ${e.message}
+      </div>`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-search"></i> Search Video';
+    }
+  });
+
+  /* ══════════════════════════════ VIDEO SESSION ═══════════════════════*/
+  function logChain(msg) {
+    const log = document.getElementById('vid-chain-log');
+    const el  = document.createElement('div');
+    el.className = 'entry';
+    el.innerHTML = `<span class="ts">${new Date().toISOString().slice(11, 19)}</span>  ${msg}`;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function uuidv4() {
+    return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+      (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+  }
+
+  document.getElementById('btn-vid-start').addEventListener('click', async () => {
+    vidStream = await startCamera(
+      document.getElementById('vid-video'),
+      document.getElementById('vid-cam-overlay'),
+      document.getElementById('vid-live'));
+    if (!vidStream) return;
+
+    vidSessionId = uuidv4().slice(0, 8);
+    document.getElementById('stat-session-id').textContent = vidSessionId;
+    document.getElementById('stat-frames').textContent     = '0';
+    document.getElementById('stat-status').textContent     = 'Recording';
+    document.getElementById('vid-chain-log').innerHTML     = '';
+    document.getElementById('vid-end-results').innerHTML   = '';
+    document.getElementById('vid-export-row').style.display = 'none';
+
+    vidFrameLog   = [];
+    vidEndData    = null;
+    vidRecordedChunks = [];
+    vidRecordedBlob   = null;
+    vidSessionMeta = {
+      session_id:  vidSessionId,
+      started_at:  new Date().toISOString(),
+      ended_at:    null,
+    };
+
+    let vidSnapB64 = null;
+
+    /* ── Start MediaRecorder for MP4/WebM download ── */
+    try {
+      const mimeType = MediaRecorder.isTypeSupported('video/mp4')
+        ? 'video/mp4'
+        : MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+          ? 'video/webm;codecs=vp9'
+          : 'video/webm';
+      mediaRecorder = new MediaRecorder(vidStream, { mimeType });
+      mediaRecorder.ondataavailable = e => {
+        if (e.data && e.data.size > 0) vidRecordedChunks.push(e.data);
+      };
+      mediaRecorder.start(1000); /* collect a chunk every second */
+      logChain(`Recording started — codec: ${mimeType}`);
+    } catch(e) {
+      logChain(`MediaRecorder unavailable: ${e.message}`);
+    }
+
+    try {
+      await fetch(`${API}/video/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: vidSessionId }),
+      });
+      logChain(`Session ${vidSessionId} started`);
+    } catch(e) {
+      logChain(`Failed to start: ${e.message}`);
+      return;
+    }
+
+    document.getElementById('btn-vid-start').disabled    = true;
+    document.getElementById('btn-vid-end').disabled      = false;
+    document.getElementById('btn-vid-snap').disabled     = false;
+    document.getElementById('btn-vid-download').disabled = true;
+
+    const vidSnapBtn = document.getElementById('btn-vid-snap');
+    const vidDlBtn   = document.getElementById('btn-vid-download');
+    const vidCanvas  = document.getElementById('vid-canvas');
+
+    vidSnapBtn.onclick = () => {
+      vidSnapB64 = captureFrame(document.getElementById('vid-video'), vidCanvas);
+      vidCanvas.style.display  = 'block';
+      vidCanvas.style.zIndex   = '5';
+      vidDlBtn.disabled        = false;
+      setTimeout(() => {
+        vidCanvas.style.display = 'none';
+        vidCanvas.style.zIndex  = '';
+      }, 1800);
+    };
+
+    vidDlBtn.onclick = () => {
+      if (!vidSnapB64) return;
+      const link = document.createElement('a');
+      link.href     = vidSnapB64;
+      link.download = `vid-${vidSessionId}-${new Date().toISOString().slice(0,19).replace(/[:-]/g,'')}.jpg`;
+      link.click();
+    };
+
+    let frameCount = 0;
+    const canvas = document.createElement('canvas');
+
+    vidFrameTimer = setInterval(async () => {
+      const video  = document.getElementById('vid-video');
+      canvas.width  = video.videoWidth  || 640;
+      canvas.height = video.videoHeight || 480;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      const b64 = canvas.toDataURL('image/jpeg', 0.7);
+      try {
+        const res  = await fetch(`${API}/video/frame/${vidSessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_b64: b64 }),
+        });
+        const data = await res.json();
+        frameCount++;
+        document.getElementById('stat-frames').textContent = frameCount;
+        vidFrameLog.push({
+          sequence:    data.sequence,
+          timestamp:   new Date().toISOString(),
+          sha256:      data.sha256      || null,
+          phash:       data.phash       || null,
+          merkle_root: data.merkle_root || null,
+          chain_hash:  data.chain_hash  || null,
+        });
+        logChain(`#${data.sequence}  chain=${data.chain_hash}  merkle=${data.merkle_root}`);
+      } catch(e) {
+        logChain(`Frame error: ${e.message}`);
+      }
+    }, 1000);
+  });
+
+  document.getElementById('btn-vid-end').addEventListener('click', async () => {
+    clearInterval(vidFrameTimer);
+
+    /* Stop MediaRecorder first — onstop fires asynchronously */
+    await new Promise(resolve => {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.onstop = () => {
+          const mime = mediaRecorder.mimeType || 'video/webm';
+          vidRecordedBlob = new Blob(vidRecordedChunks, { type: mime });
+          resolve();
+        };
+        mediaRecorder.stop();
+      } else {
+        resolve();
+      }
+    });
+
+    vidStream = stopCamera(vidStream,
+      document.getElementById('vid-video'),
+      document.getElementById('vid-cam-overlay'),
+      document.getElementById('vid-live'));
+    document.getElementById('stat-status').textContent = 'Finalising…';
+
+    try {
+      const res  = await fetch(`${API}/video/end/${vidSessionId}`, { method: 'POST' });
+      const data = await res.json();
+      const valid = data.chain?.valid;
+      vidEndData = data;
+      if (vidSessionMeta) vidSessionMeta.ended_at = new Date().toISOString();
+      logChain(`Session ended — chain ${valid ? 'VALID' : 'BROKEN'}`);
+      document.getElementById('stat-status').textContent = valid ? 'Valid' : 'Broken';
+      document.getElementById('vid-end-results').innerHTML =
+        hashRow('Chain Valid', valid ? 'Yes' : 'No', valid ? 'verified' : 'danger') +
+        hashRow('Frame Count', String(data.frame_count)) +
+        (data.chain?.reason ? hashRow('Reason', data.chain.reason, 'danger') : '') +
+        renderBlockchain(data.blockchain);
+      document.getElementById('vid-export-row').style.display = 'block';
+    } catch(e) {
+      logChain(`End error: ${e.message}`);
+    }
+
+    document.getElementById('btn-vid-start').disabled    = false;
+    document.getElementById('btn-vid-end').disabled      = true;
+    document.getElementById('btn-vid-snap').disabled     = true;
+    document.getElementById('btn-vid-download').disabled = true;
+  });
+
+  /* ── Video session export ─────────────────────────────────────────── */
+  function buildExportPayload() {
+    return {
+      session:    vidSessionMeta,
+      summary: {
+        frame_count:  vidEndData?.frame_count  ?? vidFrameLog.length,
+        chain_valid:  vidEndData?.chain?.valid  ?? null,
+        chain_reason: vidEndData?.chain?.reason ?? null,
+        blockchain:   vidEndData?.blockchain    ?? null,
+      },
+      frames: vidFrameLog,
+    };
+  }
+
+  function triggerDownload(content, filename, mime) {
+    const blob = new Blob([content], { type: mime });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  document.getElementById('btn-vid-export-json').addEventListener('click', () => {
+    const payload  = buildExportPayload();
+    const filename = `capchain-${vidSessionMeta?.session_id ?? 'session'}-${Date.now()}.json`;
+    triggerDownload(JSON.stringify(payload, null, 2), filename, 'application/json');
+    document.getElementById('vid-export-hint').textContent = `Exported ${vidFrameLog.length} frames → ${filename}`;
+  });
+
+  document.getElementById('btn-vid-export-csv').addEventListener('click', () => {
+    const rows = [
+      ['sequence', 'timestamp', 'sha256', 'phash', 'merkle_root', 'chain_hash'],
+      ...vidFrameLog.map(f => [
+        f.sequence, f.timestamp, f.sha256 ?? '', f.phash ?? '',
+        f.merkle_root ?? '', f.chain_hash ?? '',
+      ]),
+    ];
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const filename = `capchain-${vidSessionMeta?.session_id ?? 'session'}-${Date.now()}.csv`;
+    triggerDownload(csv, filename, 'text/csv');
+    document.getElementById('vid-export-hint').textContent = `Exported ${vidFrameLog.length} frames → ${filename}`;
+  });
+
+  document.getElementById('btn-vid-export-mp4').addEventListener('click', () => {
+    if (!vidRecordedBlob || vidRecordedBlob.size === 0) {
+      document.getElementById('vid-export-hint').textContent = 'No recording available yet.';
+      return;
+    }
+    const ext      = vidRecordedBlob.type.includes('mp4') ? 'mp4' : 'webm';
+    const filename = `capchain-${vidSessionMeta?.session_id ?? 'session'}-${Date.now()}.${ext}`;
+    const url      = URL.createObjectURL(vidRecordedBlob);
+    const a        = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    const mb = (vidRecordedBlob.size / 1048576).toFixed(1);
+    document.getElementById('vid-export-hint').textContent = `Downloaded ${mb} MB → ${filename}`;
+  });
+
+  /* ══════════════════════════════ LIVE WEBSOCKET ══════════════════════*/
+  function wsLog(msg) {
+    const log = document.getElementById('ws-log');
+    const el  = document.createElement('div');
+    el.className = 'entry';
+    el.innerHTML = `<span class="ts">${new Date().toISOString().slice(11, 19)}</span>  ${msg}`;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    while (log.children.length > 200) log.removeChild(log.firstChild);
+  }
+
+  document.getElementById('btn-ws-connect').addEventListener('click', async () => {
+    wsStream = await startCamera(
+      document.getElementById('ws-video'),
+      document.getElementById('ws-cam-overlay'),
+      document.getElementById('ws-live'));
+    if (!wsStream) return;
+
+    const sid   = uuidv4().slice(0, 8);
+    const wsUrl = `ws://localhost:8000/ws/live/${sid}`;
+    document.getElementById('ws-state').textContent = 'Connecting';
+    wsLog(`Connecting to ${wsUrl}`);
+
+    try {
+      socket = new WebSocket(wsUrl);
+    } catch(e) {
+      wsLog(`Error: ${e.message}`);
+      return;
+    }
+
+    socket.onopen = () => {
+      document.getElementById('ws-state').textContent = 'Open';
+      wsLog('WebSocket connected');
+      document.getElementById('btn-ws-connect').disabled    = true;
+      document.getElementById('btn-ws-disconnect').disabled = false;
+
+      const canvas  = document.createElement('canvas');
+      const video   = document.getElementById('ws-video');
+      let fpsTimer  = Date.now();
+
+      wsFrameTimer = setInterval(() => {
+        if (socket.readyState !== WebSocket.OPEN) return;
+        canvas.width  = video.videoWidth  || 320;
+        canvas.height = video.videoHeight || 240;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        socket.send(canvas.toDataURL('image/jpeg', 0.6));
+        wsFpsCounter++;
+      }, 500);
+
+      setInterval(() => {
+        const now = Date.now();
+        const fps = Math.round(wsFpsCounter / ((now - fpsTimer) / 1000));
+        document.getElementById('ws-fps').textContent = fps;
+        wsFpsCounter = 0;
+        fpsTimer = now;
+      }, 1000);
+    };
+
+    socket.onmessage = e => {
+      wsTotal++;
+      document.getElementById('ws-total').textContent = wsTotal;
+      const d = JSON.parse(e.data);
+      wsLog(`#${d.sequence}  sha=${d.sha256}  chain=${d.chain_hash}`);
+    };
+
+    socket.onerror = () => {
+      document.getElementById('ws-state').textContent = 'Error';
+      wsLog('WebSocket error — is the backend running?');
+    };
+
+    socket.onclose = () => {
+      document.getElementById('ws-state').textContent = 'Closed';
+      wsLog('WebSocket disconnected');
+      clearInterval(wsFrameTimer);
+      document.getElementById('btn-ws-connect').disabled    = false;
+      document.getElementById('btn-ws-disconnect').disabled = true;
+    };
+  });
+
+  document.getElementById('btn-ws-disconnect').addEventListener('click', () => {
+    clearInterval(wsFrameTimer);
+    if (socket) socket.close();
+    wsStream = stopCamera(wsStream,
+      document.getElementById('ws-video'),
+      document.getElementById('ws-cam-overlay'),
+      document.getElementById('ws-live'));
+  });
+</script>
+</body>
+</html>

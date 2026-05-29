@@ -1,0 +1,46 @@
+# ======================
+# SECRETS — NEVER COMMIT
+# ======================
+.env
+*.pem
+*.key
+
+# ======================
+# Python
+# ======================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# ======================
+# Database
+# ======================
+*.sql
+*.dump
+*.db
+*.sqlite3
+
+# ======================
+# OS & Editor junk
+# ======================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# ======================
+# Misc
+# ======================
+*.log
