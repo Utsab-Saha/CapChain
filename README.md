@@ -1,19 +1,4 @@
  
-### Backend
-
-```bash
-cd backend
-pip install -r requirements.txt
-cp .env.example .env        # fill in your values
-uvicorn main:app --reload --port 8000
-```
-
-### Frontend
-
-Open `frontend/index.html` directly in your browser — no build step needed.  
-It talks to `http://localhost:8000` by default. Change the `API` constant at the top of the `<script>` block if your backend runs elsewhere.
-
- 
 ## API Endpoints
 
 | Method | Path | Description |
