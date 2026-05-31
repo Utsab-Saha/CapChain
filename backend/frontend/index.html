@@ -844,50 +844,30 @@
 
       <div class="card">
         <div class="card-title">
-          <i class="ti ti-camera" aria-hidden="true"></i> Suspect Frame
+          <i class="ti ti-shield-check" aria-hidden="true"></i> Verify Image
         </div>
-        <div class="camera-wrap" id="ver-cam-wrap">
-          <video id="ver-video" autoplay muted playsinline></video>
-          <canvas class="preview" id="ver-canvas"></canvas>
-          <div class="rec-badge" id="ver-live">LIVE</div>
-          <div class="cam-overlay" id="ver-cam-overlay">
-            <i class="ti ti-shield-check" aria-hidden="true"></i>
-            <span>Start camera or upload a JPG</span>
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn-primary" id="btn-ver-start">
-            <i class="ti ti-player-play"></i> Start
-          </button>
-          <button class="btn-ghost" id="btn-ver-capture" disabled>
-            <i class="ti ti-camera"></i> Capture
-          </button>
-        </div>
-        <div style="margin-top:.8rem">
-          <div class="section-label">Upload Saved JPG</div>
-          <input type="file" id="ver-upload" accept="image/jpeg,image/png,image/webp" />
-        </div>
-      </div>
 
-      <div class="card">
-        <div class="card-title">
-          <i class="ti ti-search" aria-hidden="true"></i> Search Hash Database
-        </div>
         <div style="margin-bottom:.7rem">
-          <div class="section-label">Search Query</div>
-          <input type="text" id="search-query"
-            placeholder="Enter SHA256, pHash, or leave empty to browse all…" />
-          <div class="hint">Enter a 64-char SHA256 hash or 16-char pHash to search. Leave empty to see all stored hashes.</div>
+          <div class="section-label">Upload Image</div>
+          <input type="file" id="ver-upload" accept="image/jpeg,image/png,image/webp" />
+          <div class="hint">Upload a JPG, PNG, or WebP image — it will be fingerprinted and searched across the database and Polygon blockchain automatically.</div>
         </div>
-        <button class="btn-primary" id="btn-search" style="width:100%;justify-content:center;padding:.55rem">
-          <i class="ti ti-search"></i> Search
+
+        <button class="btn-primary" id="btn-verify" disabled
+          style="width:100%;justify-content:center;padding:.55rem">
+          <i class="ti ti-shield-check"></i> Verify Image
         </button>
-        <div id="search-results" style="margin-top:.85rem"></div>
+
+        <div style="margin-top:.85rem">
+          <div class="verdict" id="ver-verdict"></div>
+        </div>
+
+        <div id="ver-results" style="margin-top:.7rem"></div>
       </div>
 
       <div class="card">
         <div class="card-title">
-          <i class="ti ti-video" aria-hidden="true"></i> Search Video File
+          <i class="ti ti-video" aria-hidden="true"></i> Verify Video
         </div>
         <div style="margin-bottom:.7rem">
           <div class="section-label">Upload Video File</div>
@@ -904,37 +884,6 @@
           <i class="ti ti-search"></i> Search Video
         </button>
         <div id="video-search-results" style="margin-top:.85rem"></div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">
-          <i class="ti ti-settings-2" aria-hidden="true"></i> Verification Engine
-        </div>
-
-        <div style="margin-bottom:.7rem">
-          <div class="section-label">Original SHA256 (Optional)</div>
-          <input type="text" id="original-sha"
-            placeholder="Leave empty for database check only, or paste SHA256 to compare against a specific original…" />
-          <div class="hint">Without SHA256: checks if this image exists in the database. With SHA256: compares against specific original.</div>
-        </div>
-
-        <button class="btn-primary" id="btn-verify" disabled
-          style="width:100%;justify-content:center;padding:.55rem">
-          <i class="ti ti-shield-check"></i> Verify Image
-        </button>
-
-        <div style="margin-top:.85rem">
-          <div class="verdict" id="ver-verdict"></div>
-        </div>
-
-        <div id="ver-results" style="margin-top:.7rem"></div>
-      </div>
-
-      <div class="card col-full" id="ver-auth-card" style="display:none">
-        <div class="card-title">
-          <i class="ti ti-database-check" aria-hidden="true"></i> Database Authentication
-        </div>
-        <div id="ver-auth-results" style="margin-top:.7rem"></div>
       </div>
 
       <div class="card col-full" id="ver-annotated-card" style="display:none">
@@ -1103,7 +1052,7 @@
  
 
 <script>
-  const API = 'https://capchain-vap3.onrender.com';
+  const API = window.location.origin;
 
   let snapStream = null, verStream = null, vidStream = null, wsStream = null;
   let snapSha256 = null;
@@ -1286,7 +1235,6 @@
       });
       const data = await res.json();
       snapSha256 = data.sha256;
-      document.getElementById('original-sha').value = snapSha256;
 
       results.innerHTML =
         hashRow('SHA256 — Exact Identity', data.sha256) +
@@ -1337,95 +1285,24 @@
     video.style.visibility = 'hidden';
   }
 
-  function resetVerifyPreview() {
-    const canvas  = document.getElementById('ver-canvas');
-    const overlay = document.getElementById('ver-cam-overlay');
-    const video   = document.getElementById('ver-video');
-    canvas.style.display   = 'none';
-    canvas.style.zIndex    = '';
-    overlay.style.display  = 'flex';
-    video.style.visibility = 'visible';
-  }
-
-  document.getElementById('btn-ver-start').addEventListener('click', async () => {
-    const btn = document.getElementById('btn-ver-start');
-    if (verStream) {
-      verStream = stopCamera(verStream,
-        document.getElementById('ver-video'),
-        document.getElementById('ver-cam-overlay'),
-        document.getElementById('ver-live'));
-      btn.innerHTML = '<i class="ti ti-player-play"></i> Start';
-      document.getElementById('btn-ver-capture').disabled = true;
-      document.getElementById('btn-verify').disabled      = true;
-      /* Clear any frozen preview so overlay shows cleanly */
-      resetVerifyPreview();
-    } else {
-      verStream = await startCamera(
-        document.getElementById('ver-video'),
-        document.getElementById('ver-cam-overlay'),
-        document.getElementById('ver-live'));
-      if (verStream) {
-        btn.innerHTML = '<i class="ti ti-player-stop"></i> Stop';
-        document.getElementById('btn-ver-capture').disabled = false;
-        document.getElementById('btn-verify').disabled      = false;
-        /* Hide any stale uploaded preview so live feed is visible */
-        const canvas = document.getElementById('ver-canvas');
-        canvas.style.display = 'none';
-        canvas.style.zIndex  = '';
-        document.getElementById('ver-video').style.visibility = 'visible';
-      }
-    }
-  });
-
-  let verCapture = null;
   let verUploadedFile = null;
 
-  /* ── Capture from live camera ──────────────────────────────────────── */
-  document.getElementById('btn-ver-capture').addEventListener('click', () => {
-    const canvas = document.getElementById('ver-canvas');
-    verCapture = captureFrame(document.getElementById('ver-video'), canvas);
-    verUploadedFile = null;
-    document.getElementById('ver-upload').value = '';
-    showVerifyPreview(canvas);
-    document.getElementById('btn-verify').disabled = false;
-  });
-
-  /* ── Upload a saved image file ─────────────────────────────────────── */
-  document.getElementById('ver-upload').addEventListener('change', e => {
+  /* ── Upload image file ─────────────────────────────────────────────── */
+  document.getElementById('ver-upload').addEventListener('change', (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    verUploadedFile = file;
-    verCapture = null;
-
-    /* Draw the uploaded image into the preview canvas */
-    const canvas = document.getElementById('ver-canvas');
-    const img    = new Image();
-    const url    = URL.createObjectURL(file);
-    img.onload = () => {
-      canvas.width  = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.getContext('2d').drawImage(img, 0, 0);
-      URL.revokeObjectURL(url);
-      showVerifyPreview(canvas);
-    };
-    img.src = url;
-
-    document.getElementById('btn-verify').disabled = false;
+    verUploadedFile = file || null;
+    document.getElementById('btn-verify').disabled = !file;
   });
 
   document.getElementById('btn-verify').addEventListener('click', async () => {
-    const sha = document.getElementById('original-sha').value.trim();
-    if (!verCapture && !verUploadedFile) return alert('Capture a frame or upload a JPG first');
+    if (!verUploadedFile) return alert('Upload a JPG first');
 
     const results     = document.getElementById('ver-results');
     const verdict     = document.getElementById('ver-verdict');
-    const authCard    = document.getElementById('ver-auth-card');
-    const authResults = document.getElementById('ver-auth-results');
 
     // Reset state
     verdict.style.display = 'none';
     results.innerHTML     = '<div class="empty"><div class="spinner" style="margin:0 auto"></div></div>';
-    authCard.style.display = 'none';
     document.getElementById('ver-tile-grid').innerHTML = '';
 
     // Always show the submitted frame immediately in the annotated panel.
@@ -1433,207 +1310,129 @@
     const annotatedImg  = document.getElementById('ver-annotated-img');
     const annotatedWrap = document.getElementById('ver-annotated-wrap');
     const annotatedCard = document.getElementById('ver-annotated-card');
-    if (verCapture) {
-      annotatedImg.src          = verCapture;
-      annotatedWrap.style.display = 'block';
-      annotatedCard.style.display = 'block';
-    } else if (verUploadedFile) {
-      const previewUrl = URL.createObjectURL(verUploadedFile);
-      annotatedImg.onload = () => URL.revokeObjectURL(previewUrl);
-      annotatedImg.src          = previewUrl;
-      annotatedWrap.style.display = 'block';
-      annotatedCard.style.display = 'block';
-    }
+    const previewUrl = URL.createObjectURL(verUploadedFile);
+    annotatedImg.onload = () => URL.revokeObjectURL(previewUrl);
+    annotatedImg.src          = previewUrl;
+    annotatedWrap.style.display = 'block';
+    annotatedCard.style.display = 'block';
 
     try {
-      /* ── MODE 1: Compare against a specific original (SHA256 provided) ── */
-      if (sha) {
-        let res;
-        if (verUploadedFile) {
-          const formData = new FormData();
-          formData.append('file', verUploadedFile);
-          formData.append('original_sha256', sha);
-          res = await fetch(`${API}/verify/upload`, { method: 'POST', body: formData });
-        } else {
-          res = await fetch(`${API}/verify`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image_b64: verCapture, original_sha256: sha }),
-          });
-        }
-        const data = await res.json();
+      // Convert uploaded image to base64 and call /verify (auto-searches DB + blockchain)
+      const imageData = await fileToBase64(verUploadedFile);
+      const res = await fetch(`${API}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_b64: imageData,
+          original_sha256: null,
+        }),
+      });
+      const data = await res.json();
 
-        // Verdict banner
+      // Handle HTTP errors
+      if (!res.ok) {
+        const errMsg = data.detail || `Server error ${res.status}`;
         verdict.style.display = 'flex';
-        verdict.textContent   = data.verdict || '';
-        if (data.exact_match || (!data.tamper?.tampered && data.visually_similar)) {
-          verdict.className = 'verdict clean';
-        } else if (data.tamper?.tampered) {
-          verdict.className = 'verdict tampered';
-        } else {
-          verdict.className = 'verdict diff';
-        }
-
-        // Hash rows
-        results.innerHTML =
-          hashRow('Exact Match', data.exact_match ? 'Yes' : 'No', data.exact_match ? 'verified' : 'danger') +
-          hashRow('Hamming Distance',
-            `${data.hamming_distance} bits · ${data.visually_similar ? 'Similar' : 'Different'}`,
-            data.visually_similar ? 'verified' : 'warning') +
-          hashRow('Changed Tiles',
-            `${data.tamper?.changed_tiles?.length || 0} / 64  (${data.tamper?.change_pct}%)`,
-            data.tamper?.tampered ? 'danger' : 'verified') +
-          hashRow('Likely Region', data.tamper?.likely_region || 'none');
-
-        // If backend returns an annotated overlay, replace the fallback preview with it
-        if (data.annotated_image) {
-          annotatedImg.src = data.annotated_image;
-        }
-
-        // Tile grid — show card whenever tile data exists
-        if (data.tamper?.changed_tiles) {
-          renderTileGrid(data.tamper.changed_tiles);
-        }
+        verdict.textContent   = errMsg;
+        verdict.className     = 'verdict diff';
+        results.innerHTML     = `<div class="empty" style="color:var(--danger)">${errMsg}</div>`;
+        return;
       }
 
-      /* ── MODE 2: Database authenticity check (always runs) ─────────── */
-      try {
-        let imageData = verCapture;
-        if (!imageData && verUploadedFile) {
-          imageData = await fileToBase64(verUploadedFile);
+      // Verdict banner
+      verdict.style.display = 'flex';
+      verdict.textContent   = data.verdict || '';
+      if (data.exact_match) {
+        verdict.className = 'verdict clean';
+      } else if (data.visually_similar) {
+        verdict.className = 'verdict tampered';
+      } else {
+        verdict.className = 'verdict diff';
+      }
+
+      // ── Standalone / auto-search mode ─────────────────────────────
+      if (data.standalone) {
+        let html = '';
+
+        // Fingerprint hashes
+        html += hashRow('SHA256', data.sha256 || '—');
+        html += hashRow('pHash', data.phash || '—', 'verified');
+        html += hashRow('Merkle Root', data.merkle_root ? data.merkle_root.slice(0,16) + '…' : '—');
+
+        html += `<div style="height:.5rem"></div>`;
+
+        // ── Exact match ──────────────────────────────────────────────
+        html += `<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:.35rem">Postgres · Exact SHA256</div>`;
+        if (data.exact_record) {
+          const r = data.exact_record;
+          html += hashRow('Status', '✓ Exact match found', 'verified');
+          html += hashRow('Captured At', r.captured_at ? new Date(r.captured_at * 1000).toLocaleString() : '—');
+          html += hashRow('Type', r.capture_type || 'snapshot');
+          if (r.merkle_root) html += hashRow('Stored Merkle Root', r.merkle_root.slice(0,16) + '…');
+          if (r.blockchain_tx_hash) html += hashRow('TX Hash', r.blockchain_tx_hash.slice(0,16) + '…');
+        } else {
+          html += hashRow('Status', '✗ No exact match in database', 'danger');
         }
 
-        const authRes = await fetch(`${API}/verify/check-database`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            image_b64:      imageData || '',
-            original_sha256: sha || '',
-          }),
-        });
-        const authData = await authRes.json();
-        authCard.style.display = 'block';
+        html += `<div style="height:.5rem"></div>`;
 
-        let authHTML = authData.is_authentic
-          ? '<div class="auth-badge authentic"><i class="ti ti-circle-check" style="font-size:14px"></i> Authentic — Found in Database</div>'
-          : '<div class="auth-badge not-found"><i class="ti ti-circle-x" style="font-size:14px"></i> Not Found — Unknown or New Image</div>';
-
-        if (authData.exact_sha256_match) {
-          authHTML += '<div class="auth-match sha256">' +
-            '<strong>Exact SHA256 Match</strong><br>' +
-            `SHA256: ${authData.exact_sha256_match.sha256.slice(0, 12)}…<br>` +
-            `Captured: ${new Date(authData.exact_sha256_match.captured_at * 1000).toLocaleString()}<br>` +
-            `Type: ${authData.exact_sha256_match.capture_type || 'unknown'}`;
-          if (authData.exact_sha256_match.blockchain_tx_hash) {
-            authHTML += `<br>On-Chain: ${authData.exact_sha256_match.blockchain_tx_hash.slice(0, 16)}…`;
-          }
-          authHTML += '</div>';
-        }
-
-        if (authData.exact_phash_matches?.length > 0) {
-          authHTML += '<div class="auth-match phash"><strong>Exact pHash Matches</strong><br>' +
-            `${authData.exact_phash_matches.length} identical image(s) found<br>`;
-          authData.exact_phash_matches.slice(0, 2).forEach(m => {
-            authHTML += `· ${m.sha256.slice(0, 12)}… (${m.capture_type})<br>`;
+        // ── Similar matches (phash) ──────────────────────────────────
+        html += `<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:.35rem">Postgres · Similar Images (pHash)</div>`;
+        if (data.similar_matches && data.similar_matches.length > 0) {
+          html += hashRow('Similar Found', `${data.similar_matches.length} snapshot(s)`, 'warning');
+          data.similar_matches.slice(0, 3).forEach((m, i) => {
+            html += hashRow(`Match ${i + 1}`,
+              `${m.sha256.slice(0,16)}… · ${m.captured_at ? new Date(m.captured_at * 1000).toLocaleDateString() : '?'}`,
+              'warning');
           });
-          if (authData.exact_phash_matches.length > 2)
-            authHTML += `+${authData.exact_phash_matches.length - 2} more<br>`;
-          authHTML += '</div>';
+        } else {
+          html += hashRow('Similar Found', 'None', data.exact_match ? 'verified' : '');
         }
 
-        if (authData.similar_hashes?.length > 0) {
-          authHTML += '<div class="auth-match similar"><strong>Similar Images Found</strong><br>' +
-            `${authData.similar_hashes.length} visually similar image(s)<br>`;
-          authData.similar_hashes.slice(0, 2).forEach(m => {
-            authHTML += `· Distance: ${m.hamming_distance} bits (${m.capture_type})<br>`;
-          });
-          if (authData.similar_hashes.length > 2)
-            authHTML += `+${authData.similar_hashes.length - 2} more<br>`;
-          authHTML += '</div>';
+        html += `<div style="height:.5rem"></div>`;
+
+        // ── Blockchain ───────────────────────────────────────────────
+        html += `<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:.35rem">Polygon · Blockchain</div>`;
+        const bc = data.blockchain || {};
+        if (bc.mock) {
+          html += hashRow('Blockchain', 'Not configured (mock mode)', 'warning');
+        } else if (bc.verified) {
+          html += hashRow('On-chain', '✓ Verified on Polygon', 'verified');
+          if (bc.anchored_at) html += hashRow('Anchored At', new Date(bc.anchored_at * 1000).toLocaleString());
+        } else if (bc.error) {
+          html += hashRow('Blockchain', `Error: ${bc.error}`, 'danger');
+        } else {
+          html += hashRow('On-chain', '✗ Not found on Polygon', 'danger');
         }
 
-        authHTML += `<div style="margin-top:.65rem;padding:.5rem .65rem;background:var(--surface);border-radius:3px;font-size:.58rem;color:var(--text3)">` +
-          `Searched ${authData.database_count} records</div>`;
+        results.innerHTML = html;
+        // No annotated image or tile grid in standalone mode
+        return;
+      }
 
-        authResults.innerHTML = authHTML;
+      // ── Comparison mode (manual SHA256 provided) ──────────────────
+      results.innerHTML =
+        hashRow('Exact Match', data.exact_match ? 'Yes' : 'No', data.exact_match ? 'verified' : 'danger') +
+        hashRow('Hamming Distance',
+          `${data.hamming_distance} bits · ${data.visually_similar ? 'Similar' : 'Different'}`,
+          data.visually_similar ? 'verified' : 'warning') +
+        hashRow('Changed Tiles',
+          `${data.tamper?.changed_tiles?.length || 0} / 64  (${data.tamper?.change_pct}%)`,
+          data.tamper?.tampered ? 'danger' : 'verified') +
+        hashRow('Likely Region', data.tamper?.likely_region || 'none');
 
-        if (authData.tamper?.changed_tiles) {
-          renderTileGrid(authData.tamper.changed_tiles);
-        }
+      // If backend returns an annotated overlay, replace the fallback preview with it
+      if (data.annotated_image) {
+        annotatedImg.src = data.annotated_image;
+      }
 
-      } catch(authErr) {
-        console.error('Database check error:', authErr);
-        authResults.innerHTML = `<div class="empty" style="color:var(--text3)">Database check unavailable</div>`;
-        authCard.style.display = 'block';
+      // Tile grid — show card whenever tile data exists (even if all tiles are clean)
+      if (data.tamper) {
+        renderTileGrid(data.tamper.changed_tiles);
       }
 
     } catch(e) {
       results.innerHTML = `<div class="empty" style="color:var(--danger)">Error: ${e.message}</div>`;
-    }
-  });
-
-  /* ── Search Hash Database ──────────────────────────────────────────── */
-  document.getElementById('btn-search').addEventListener('click', async () => {
-    const query = document.getElementById('search-query').value.trim();
-    const resultsDiv = document.getElementById('search-results');
-    const btn = document.getElementById('btn-search');
-    
-    btn.disabled = true;
-    btn.innerHTML = '<i class="ti ti-loader"></i> Searching…';
-    resultsDiv.innerHTML = '';
-    
-    try {
-      const res = await fetch(`${API}/search/hashes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query, limit: 20 }),
-      });
-      
-      const data = await res.json();
-      
-      if (data.total_matches === 0) {
-        resultsDiv.innerHTML = `<div class="empty" style="color:var(--text3)">
-          <i class="ti ti-search"></i>
-          No matches found. ${data.total_in_database} records in database.
-        </div>`;
-      } else {
-        let html = `<div style="margin-bottom:.65rem">
-          <div style="font-family:var(--mono);font-size:.62rem;color:var(--text3);margin-bottom:.4rem">
-            Found ${data.total_matches} match(es) of ${data.total_in_database} total
-          </div>`;
-        
-        data.results.forEach((result, idx) => {
-          const captured = result.captured_at ? new Date(result.captured_at * 1000).toLocaleString() : 'unknown';
-          const bcStatus = result.blockchain_verified ? '✓ On-chain' : result.blockchain_anchored_at ? 'Anchored' : '—';
-          
-          html += `<div class="auth-match sha256" style="cursor:pointer;transition:all .15s;margin-bottom:.4rem" 
-                    onclick="document.getElementById('original-sha').value='${result.sha256}'; document.getElementById('search-query').value=''">
-            <strong>${result.sha256.slice(0, 16)}…</strong><br>
-            Type: ${result.capture_type || 'unknown'} · Captured: ${captured}<br>
-            Merkle: ${result.merkle_root ? result.merkle_root.slice(0, 12) + '…' : '—'} · Chain: ${bcStatus}
-            <div style="margin-top:.35rem;font-size:.57rem;color:var(--text3)">
-              Click to use as comparison original
-            </div>
-          </div>`;
-        });
-        
-        html += '</div>';
-        resultsDiv.innerHTML = html;
-      }
-    } catch(e) {
-      resultsDiv.innerHTML = `<div class="empty" style="color:var(--danger)">
-        Error: ${e.message}
-      </div>`;
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="ti ti-search"></i> Search';
-    }
-  });
-  
-  /* Allow Enter key to trigger search */
-  document.getElementById('search-query').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      document.getElementById('btn-search').click();
     }
   });
 

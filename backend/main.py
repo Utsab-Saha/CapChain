@@ -104,7 +104,7 @@ class FramePayload(BaseModel):
 
 class VerifyPayload(BaseModel):
     image_b64: str
-    original_sha256: str
+    original_sha256: str = ""
 
 
 class VideoSessionPayload(BaseModel):
@@ -300,6 +300,70 @@ async def verify_frame(payload: VerifyPayload) -> dict:
 
     suspect_tile_data = suspect_fp["tiled"].pop("tile_data", {})
 
+    # ── Auto-search mode: no original SHA256 provided ────────────────
+    # Fingerprint the image, search Postgres by SHA256 + phash,
+    # and check Polygon blockchain for the merkle root.
+    if not payload.original_sha256:
+
+        suspect_fp["tiled"]["tile_data"] = suspect_tile_data
+
+        # 1. Exact SHA256 match in Postgres / in-memory
+        exact_db_match = await search_by_sha256(suspect_fp["sha256"])
+
+        # 2. Perceptual hash — find visually similar snapshots
+        similar_matches = await search_by_phash(suspect_fp["phash"]) or []
+
+        # Remove the exact match from similar list to avoid duplication
+        exact_sha = suspect_fp["sha256"]
+        similar_matches = [
+            m for m in similar_matches
+            if m["sha256"] != exact_sha
+        ]
+
+        # 3. Blockchain check — verify merkle root on Polygon
+        tiled_root = suspect_fp["tiled"].get("root", "")
+        blockchain_result = verify_on_chain(tiled_root) if tiled_root else {
+            "verified": False,
+            "reason": "No merkle root computed"
+        }
+
+        # Build verdict
+        if exact_db_match:
+            verdict = "VERIFIED — exact match found in database and blockchain registry"
+        elif similar_matches:
+            verdict = (
+                f"SIMILAR — {len(similar_matches)} visually similar "
+                f"snapshot(s) found; no exact SHA256 match"
+            )
+        else:
+            verdict = "NOT FOUND — no matching or similar snapshot in database"
+
+        return {
+            "standalone": True,
+            "sha256": suspect_fp["sha256"],
+            "phash": suspect_fp["phash"],
+            "merkle_root": tiled_root,
+            "exact_match": exact_db_match is not None,
+            "exact_record": exact_db_match,
+            "similar_count": len(similar_matches),
+            "similar_matches": similar_matches,
+            "blockchain": blockchain_result,
+            "in_database": exact_db_match is not None,
+            "captured_at": exact_db_match["captured_at"] if exact_db_match else None,
+            "hamming_distance": None,
+            "visually_similar": len(similar_matches) > 0,
+            "tamper": {
+                "tampered": False,
+                "changed_tiles": [],
+                "change_pct": 0.0,
+                "likely_region": "none",
+            },
+            "annotated_image": None,
+            "verdict": verdict,
+        }
+
+    # ── Comparison mode: original SHA256 provided ────────────────────
+
     original_record = snapshot_store.get(
         payload.original_sha256
     )
@@ -375,6 +439,7 @@ async def verify_frame(payload: VerifyPayload) -> dict:
     )
 
     return {
+        "standalone": False,
         "exact_match": exact_match,
         "hamming_distance": hd,
         "visually_similar": hd < 8,
