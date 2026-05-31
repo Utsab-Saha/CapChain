@@ -19,7 +19,9 @@ from fastapi import (
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
-from pydantic import BaseModel
+from typing import Optional
+
+from pydantic import BaseModel, field_validator
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -104,7 +106,14 @@ class FramePayload(BaseModel):
 
 class VerifyPayload(BaseModel):
     image_b64: str
-    original_sha256: str = ""
+    original_sha256: Optional[str] = None
+
+    @field_validator("original_sha256", mode="before")
+    @classmethod
+    def normalise_sha(cls, v: object) -> str:
+        if v is None:
+            return ""
+        return str(v).strip()
 
 
 class VideoSessionPayload(BaseModel):
@@ -300,10 +309,19 @@ async def verify_frame(payload: VerifyPayload) -> dict:
 
     suspect_tile_data = suspect_fp["tiled"].pop("tile_data", {})
 
-    # ── Auto-search mode: no original SHA256 provided ────────────────
+    # Normalise: treat anything that isn't a full 64-char hex SHA256 as "no SHA provided"
+    sha_provided = payload.original_sha256.strip()
+    is_valid_sha = (
+        len(sha_provided) == 64
+        and all(c in "0123456789abcdefABCDEF" for c in sha_provided)
+    )
+
+    print(f"[verify] original_sha256={repr(sha_provided)} | valid_sha={is_valid_sha}")
+
+    # ── Auto-search mode: no valid original SHA256 provided ──────────
     # Fingerprint the image, search Postgres by SHA256 + phash,
     # and check Polygon blockchain for the merkle root.
-    if not payload.original_sha256:
+    if not is_valid_sha:
 
         suspect_fp["tiled"]["tile_data"] = suspect_tile_data
 
