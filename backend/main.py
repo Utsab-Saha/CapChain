@@ -338,16 +338,16 @@ async def verify_frame(payload: VerifyPayload) -> dict:
             if m["sha256"] != exact_sha
         ]
 
-        # 3. Blockchain check — verify merkle root on Polygon
-        tiled_root = suspect_fp["tiled"].get("root", "")
-        blockchain_result = verify_on_chain(tiled_root) if tiled_root else {
-            "verified": False,
-            "reason": "No merkle root computed"
-        }
+        # 3. Blockchain check — verify sha256 on Polygon
+        # (snapshot anchors fp["sha256"], so we must verify the same value)
+        blockchain_result = verify_on_chain(suspect_fp["sha256"])
 
         # Build verdict
-        if exact_db_match:
-            verdict = "VERIFIED — exact match found in database and blockchain registry"
+        chain_ok = blockchain_result.get("verified", False)
+        if exact_db_match and chain_ok:
+            verdict = "VERIFIED — exact match found in database and confirmed on Polygon"
+        elif exact_db_match:
+            verdict = "FOUND — exact match in database (blockchain not configured or pending)"
         elif similar_matches:
             verdict = (
                 f"SIMILAR — {len(similar_matches)} visually similar "
@@ -360,7 +360,7 @@ async def verify_frame(payload: VerifyPayload) -> dict:
             "standalone": True,
             "sha256": suspect_fp["sha256"],
             "phash": suspect_fp["phash"],
-            "merkle_root": tiled_root,
+            "merkle_root": suspect_fp["sha256"],  # what was actually anchored
             "exact_match": exact_db_match is not None,
             "exact_record": exact_db_match,
             "similar_count": len(similar_matches),
