@@ -888,7 +888,7 @@
 
       <div class="card col-full" id="ver-annotated-card" style="display:none">
         <div class="card-title">
-          <i class="ti ti-adjustments-alt" aria-hidden="true"></i> Tamper Overlay
+          <i class="ti ti-adjustments-alt" aria-hidden="true"></i> Similarity Analysis
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.85rem;align-items:start">
           <div>
@@ -898,8 +898,14 @@
             </div>
           </div>
           <div>
-            <div class="section-label">Tile Map (8×8)</div>
+            <div class="section-label">Tile Similarity Map (8×8)</div>
             <div class="tile-grid" id="ver-tile-grid"></div>
+            <!-- Heat map legend -->
+            <div style="display:flex;align-items:center;gap:.5rem;margin-top:.5rem;font-size:.65rem;color:var(--text3)">
+              <div style="width:10px;height:10px;border-radius:2px;background:rgba(58,158,110,.55)"></div><span>100% identical</span>
+              <div style="width:10px;height:10px;border-radius:2px;background:rgba(185,158,64,.55);margin-left:.4rem"></div><span>~50%</span>
+              <div style="width:10px;height:10px;border-radius:2px;background:rgba(185,64,64,.55);margin-left:.4rem"></div><span>0% (fully changed)</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1177,17 +1183,41 @@
   }
 
   /* ── Tile grid renderer ───────────────────────────────────────────── */
-  function renderTileGrid(changedTiles) {
+  // tileSimilarity: object { "r_c": 0-100 } — if null, fall back to changed/clean binary
+  function renderTileGrid(changedTiles, tileSimilarity = null) {
     const tileGrid      = document.getElementById('ver-tile-grid');
     const annotatedCard = document.getElementById('ver-annotated-card');
     tileGrid.innerHTML  = '';
     const changed = new Set(changedTiles);
+    const hasSim  = tileSimilarity && Object.keys(tileSimilarity).length > 0;
+
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
         const key = `${r}_${c}`;
         const el  = document.createElement('div');
-        el.className = 'tile-cell ' + (changed.has(key) ? 'changed' : 'clean');
-        el.title = key;
+        el.className = 'tile-cell';
+
+        if (hasSim && tileSimilarity[key] !== undefined) {
+          const pct = tileSimilarity[key];  // 0 = totally different, 100 = identical
+          // Heat map: green (100%) → yellow (50%) → red (0%)
+          const rc = pct < 50 ? 185 : Math.round(185 * (1 - (pct - 50) / 50));
+          const gc = pct > 50 ? 158 : Math.round(158 * (pct / 50));
+          el.style.background  = `rgba(${rc},${gc},64,${pct < 100 ? 0.55 : 0.12})`;
+          el.style.borderColor = `rgba(${rc},${gc},64,${pct < 100 ? 0.70 : 0.25})`;
+          el.title = `Tile ${key}: ${pct}% similar`;
+          if (pct < 85) {
+            el.style.fontSize       = '7px';
+            el.style.color          = '#fff';
+            el.style.display        = 'flex';
+            el.style.alignItems     = 'center';
+            el.style.justifyContent = 'center';
+            el.textContent = `${Math.round(pct)}%`;
+          }
+        } else {
+          el.classList.add(changed.has(key) ? 'changed' : 'clean');
+          el.title = key;
+        }
+
         tileGrid.appendChild(el);
       }
     }
@@ -1365,7 +1395,8 @@
         html += `<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:.35rem">Postgres · Exact SHA256</div>`;
         if (data.exact_record) {
           const r = data.exact_record;
-          html += hashRow('Status', '✓ Exact match found', 'verified');
+          const simPct = data.exact_similarity_pct != null ? data.exact_similarity_pct : 100;
+          html += hashRow('Status', `✓ Exact match — ${simPct}% similarity`, 'verified');
           html += hashRow('Captured At', r.captured_at ? new Date(r.captured_at * 1000).toLocaleString() : '—');
           html += hashRow('Type', r.capture_type || 'snapshot');
           if (r.merkle_root) html += hashRow('Stored Merkle Root', r.merkle_root.slice(0,16) + '…');
@@ -1381,9 +1412,13 @@
         if (data.similar_matches && data.similar_matches.length > 0) {
           html += hashRow('Similar Found', `${data.similar_matches.length} snapshot(s)`, 'warning');
           data.similar_matches.slice(0, 3).forEach((m, i) => {
-            html += hashRow(`Match ${i + 1}`,
-              `${m.sha256.slice(0,16)}… · ${m.captured_at ? new Date(m.captured_at * 1000).toLocaleDateString() : '?'}`,
-              'warning');
+            const simPct = m.similarity_pct != null ? m.similarity_pct : '?';
+            const simCls = simPct >= 90 ? 'verified' : simPct >= 70 ? 'warning' : 'danger';
+            html += hashRow(
+              `Match ${i + 1}`,
+              `${m.sha256.slice(0,16)}… · ${simPct}% similar · ${m.captured_at ? new Date(m.captured_at * 1000).toLocaleDateString() : '?'}`,
+              simCls
+            );
           });
         } else {
           html += hashRow('Similar Found', 'None', data.exact_match ? 'verified' : '');
@@ -1406,7 +1441,14 @@
         }
 
         results.innerHTML = html;
-        // No annotated image or tile grid in standalone mode
+
+        // Tile heat map — show if we have per-tile similarity data
+        if (data.tile_similarity && Object.keys(data.tile_similarity).length > 0) {
+          renderTileGrid([], data.tile_similarity);
+        } else if (data.best_match_sha) {
+          // No tile data cached (server restart) — show empty clean grid
+          renderTileGrid([], null);
+        }
         return;
       }
 

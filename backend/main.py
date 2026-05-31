@@ -32,6 +32,7 @@ from utils.hashing import (
     visualize_tampered_tiles,
     hamming_distance,
     generate_sha256,
+    _calculate_tile_diff_pct,
 )
 
 from utils.merkle import build_merkle_tree
@@ -329,14 +330,58 @@ async def verify_frame(payload: VerifyPayload) -> dict:
         exact_db_match = await search_by_sha256(suspect_fp["sha256"])
 
         # 2. Perceptual hash — find visually similar snapshots
-        similar_matches = await search_by_phash(suspect_fp["phash"]) or []
+        similar_matches_raw = await search_by_phash(suspect_fp["phash"]) or []
 
         # Remove the exact match from similar list to avoid duplication
         exact_sha = suspect_fp["sha256"]
-        similar_matches = [
-            m for m in similar_matches
+        similar_matches_raw = [
+            m for m in similar_matches_raw
             if m["sha256"] != exact_sha
         ]
+
+        # Enrich each similar match with hamming distance + similarity %
+        similar_matches = []
+        for m in similar_matches_raw:
+            hd = hamming_distance(suspect_fp["phash"], m["phash"])
+            similarity_pct = round((64 - hd) / 64 * 100, 1)
+            similar_matches.append({**m, "hamming_distance": hd, "similarity_pct": similarity_pct})
+
+        # For exact match also compute similarity (should be 100%)
+        if exact_db_match and exact_db_match.get("phash"):
+            hd_exact = hamming_distance(suspect_fp["phash"], exact_db_match["phash"])
+            exact_similarity_pct = round((64 - hd_exact) / 64 * 100, 1)
+        else:
+            exact_similarity_pct = 100.0 if exact_db_match else None
+
+        # Per-tile similarity for the best match (exact or most similar)
+        tile_similarity: dict = {}
+        best_match_sha = None
+        if exact_db_match:
+            best_match_sha = exact_db_match["sha256"]
+        elif similar_matches:
+            best_match_sha = similar_matches[0]["sha256"]
+
+        if best_match_sha:
+            original_tiled = await get_tiled_hashes(best_match_sha)
+            if original_tiled:
+                suspect_tiles = suspect_fp["tiled"]["tiles"]
+                orig_tiles    = original_tiled.get("tiles", {})
+                for key in suspect_tiles:
+                    if key in orig_tiles:
+                        # hash match → 100% similar; mismatch → use pixel diff if available
+                        if suspect_tiles[key] == orig_tiles[key]:
+                            tile_similarity[key] = 100.0
+                        else:
+                            # Try pixel-level diff using cached tile data
+                            orig_px  = tile_data_store.get(best_match_sha, {}).get(key)
+                            sus_px   = suspect_tile_data.get(key)
+                            if orig_px is not None and sus_px is not None:
+                                diff_pct = _calculate_tile_diff_pct(orig_px, sus_px)
+                                tile_similarity[key] = round(100.0 - diff_pct, 1)
+                            else:
+                                tile_similarity[key] = 0.0
+                    else:
+                        tile_similarity[key] = 0.0
 
         # 3. Blockchain check — verify sha256 on Polygon
         # (snapshot anchors fp["sha256"], so we must verify the same value)
@@ -360,11 +405,14 @@ async def verify_frame(payload: VerifyPayload) -> dict:
             "standalone": True,
             "sha256": suspect_fp["sha256"],
             "phash": suspect_fp["phash"],
-            "merkle_root": suspect_fp["sha256"],  # what was actually anchored
+            "merkle_root": suspect_fp["sha256"],
             "exact_match": exact_db_match is not None,
             "exact_record": exact_db_match,
+            "exact_similarity_pct": exact_similarity_pct,
             "similar_count": len(similar_matches),
             "similar_matches": similar_matches,
+            "tile_similarity": tile_similarity,        # per-tile 0-100% vs best match
+            "best_match_sha": best_match_sha,
             "blockchain": blockchain_result,
             "in_database": exact_db_match is not None,
             "captured_at": exact_db_match["captured_at"] if exact_db_match else None,
