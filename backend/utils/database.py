@@ -78,6 +78,7 @@ async def init_db():
                     grid_size VARCHAR(10) NOT NULL,
                     tile_key VARCHAR(20) NOT NULL,
                     tile_hash VARCHAR(64) NOT NULL,
+                    tile_phash VARCHAR(16),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(sha256_parent, tile_key)
                 );
@@ -85,7 +86,13 @@ async def init_db():
                 CREATE INDEX IF NOT EXISTS idx_tiled_parent ON tiled_hashes(sha256_parent);
                 CREATE INDEX IF NOT EXISTS idx_tiled_root_hash ON tiled_hashes(tile_hash);
             """)
-            
+
+            # Migration: add tile_phash column if it doesn't exist yet
+            await cur.execute("""
+                ALTER TABLE tiled_hashes
+                ADD COLUMN IF NOT EXISTS tile_phash VARCHAR(16);
+            """)
+
             await conn.commit()
             print("✓ PostgreSQL database schema initialized")
     except Exception as e:
@@ -150,13 +157,15 @@ async def store_tiled_hashes(
     sha256: str,
     grid_size: str,
     tiles: dict,
+    tile_phashes: dict | None = None,
 ) -> bool:
     """Store tiled SHA256 hashes. Uses PostgreSQL if available, else in-memory."""
     
     # Store in in-memory first (always works)
     _db_store["tiled_hashes"][sha256] = {
-        "grid_size": grid_size,
-        "tiles": tiles,
+        "grid_size":    grid_size,
+        "tiles":        tiles,
+        "tile_phashes": tile_phashes or {},
     }
     
     # Also try PostgreSQL if available
@@ -170,13 +179,15 @@ async def store_tiled_hashes(
     try:
         async with conn.cursor() as cur:
             for tile_key, tile_hash in tiles.items():
+                tp = (tile_phashes or {}).get(tile_key)
                 await cur.execute("""
                     INSERT INTO tiled_hashes
-                    (sha256_parent, grid_size, tile_key, tile_hash)
-                    VALUES (%s, %s, %s, %s)
+                    (sha256_parent, grid_size, tile_key, tile_hash, tile_phash)
+                    VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (sha256_parent, tile_key) DO UPDATE
-                    SET tile_hash = EXCLUDED.tile_hash;
-                """, (sha256, grid_size, tile_key, tile_hash))
+                    SET tile_hash = EXCLUDED.tile_hash,
+                        tile_phash = EXCLUDED.tile_phash;
+                """, (sha256, grid_size, tile_key, tile_hash, tp))
             
             await conn.commit()
     except Exception as e:
@@ -239,7 +250,7 @@ async def get_tiled_hashes(sha256: str) -> dict | None:
             try:
                 async with conn.cursor() as cur:
                     await cur.execute("""
-                        SELECT grid_size, tile_key, tile_hash
+                        SELECT grid_size, tile_key, tile_hash, tile_phash
                         FROM tiled_hashes WHERE sha256_parent = %s
                         ORDER BY tile_key;
                     """, (sha256,))
@@ -247,7 +258,8 @@ async def get_tiled_hashes(sha256: str) -> dict | None:
                     rows = await cur.fetchall()
                     if rows:
                         grid_size = rows[0][0]
-                        tiles = {row[1]: row[2] for row in rows}
+                        tiles        = {row[1]: row[2] for row in rows}
+                        tile_phashes = {row[1]: row[3] for row in rows if row[3]}
                         
                         # Calculate root hash from ordered tiles
                         tile_list = [tiles[f"{r}_{c}"] 
@@ -256,9 +268,10 @@ async def get_tiled_hashes(sha256: str) -> dict | None:
                         root_hash = _calculate_root_from_tiles(tile_list)
                         
                         return {
-                            "grid": grid_size,
-                            "tiles": tiles,
-                            "root": root_hash,
+                            "grid":         grid_size,
+                            "tiles":        tiles,
+                            "tile_phashes": tile_phashes,
+                            "root":         root_hash,
                         }
             except Exception as e:
                 print(f"PostgreSQL get_tiled_hashes failed: {e}")
@@ -279,9 +292,10 @@ async def get_tiled_hashes(sha256: str) -> dict | None:
         root_hash = _calculate_root_from_tiles(tile_list)
         
         return {
-            "grid": grid_size,
-            "tiles": tiles,
-            "root": root_hash,
+            "grid":         grid_size,
+            "tiles":        tiles,
+            "tile_phashes": stored.get("tile_phashes", {}),
+            "root":         root_hash,
         }
     
     return None

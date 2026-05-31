@@ -33,6 +33,8 @@ from utils.hashing import (
     hamming_distance,
     generate_sha256,
     _calculate_tile_diff_pct,
+    generate_tile_phash,
+    tile_phash_similarity,
 )
 
 from utils.merkle import build_merkle_tree
@@ -276,6 +278,7 @@ async def process_snapshot(payload: FramePayload) -> dict:
         sha256=fp["sha256"],
         grid_size=fp["tiled"]["grid"],
         tiles=fp["tiled"]["tiles"],
+        tile_phashes=fp["tiled"].get("tile_phashes", {}),
     )
 
     record: dict = {
@@ -366,27 +369,33 @@ async def verify_frame(payload: VerifyPayload) -> dict:
         if best_match_sha:
             original_tiled = await get_tiled_hashes(best_match_sha)
             if original_tiled:
-                suspect_tiles    = suspect_fp["tiled"]["tiles"]
-                suspect_td       = suspect_fp["tiled"].get("tile_data", suspect_tile_data)
-                orig_tiles       = original_tiled.get("tiles", {})
-                orig_px_cache    = tile_data_store.get(best_match_sha, {})
+                suspect_tiles   = suspect_fp["tiled"]["tiles"]
+                suspect_tph     = suspect_fp["tiled"].get("tile_phashes", {})
+                orig_tiles      = original_tiled.get("tiles", {})
+                orig_tph        = original_tiled.get("tile_phashes", {})
+                orig_px_cache   = tile_data_store.get(best_match_sha, {})
+                suspect_td      = suspect_fp["tiled"].get("tile_data", suspect_tile_data)
 
                 for key in suspect_tiles:
                     if key not in orig_tiles:
                         tile_similarity[key] = 0.0
                     elif suspect_tiles[key] == orig_tiles[key]:
-                        # Identical hash after normalization → truly identical
+                        # Identical SHA256 hash → byte-perfect match
                         tile_similarity[key] = 100.0
+                    elif suspect_tph.get(key) and orig_tph.get(key):
+                        # Hashes differ but both tile phashes available — use perceptual similarity
+                        # This is robust to JPEG re-compression and survives server restarts
+                        tile_similarity[key] = tile_phash_similarity(
+                            suspect_tph[key], orig_tph[key]
+                        )
                     else:
-                        # Hashes differ — use pixel diff if both tiles are in memory
+                        # No tile phash in DB (old snapshot) — fall back to pixel diff
                         orig_px = orig_px_cache.get(key)
                         sus_px  = suspect_td.get(key)
                         if orig_px is not None and sus_px is not None:
                             diff_pct = _calculate_tile_diff_pct(orig_px, sus_px)
                             tile_similarity[key] = round(100.0 - diff_pct, 1)
                         else:
-                            # No pixel cache (server restarted) — hash genuinely differs,
-                            # mark as changed (0%) since normalization makes hashes stable
                             tile_similarity[key] = 0.0
 
         # 4. Blockchain check

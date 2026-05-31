@@ -56,6 +56,29 @@ def _normalize_for_tiling(frame: np.ndarray) -> np.ndarray:
     return gray
 
 
+def generate_tile_phash(tile: np.ndarray, hash_size: int = 8) -> str:
+    """
+    Compute a perceptual hash for a single tile.
+    Robust to JPEG re-compression, minor brightness shifts, sensor noise.
+    Tiles are already grayscale after normalization so skip cvtColor.
+    """
+    # Ensure 2-D grayscale
+    if len(tile.shape) == 3:
+        tile = cv2.cvtColor(tile, cv2.COLOR_BGR2GRAY)
+    resized   = cv2.resize(tile, (hash_size + 1, hash_size), interpolation=cv2.INTER_AREA)
+    dct       = cv2.dct(resized.astype(np.float32))
+    dct_block = dct[:hash_size, :hash_size]
+    mean_val  = float(dct_block.mean())
+    bits      = (dct_block > mean_val).flatten()
+    return format(int("".join("1" if b else "0" for b in bits), 2), "016x")
+
+
+def tile_phash_similarity(phash1: str, phash2: str) -> float:
+    """Convert hamming distance between two tile phashes to a 0-100% similarity score."""
+    hd = bin(int(phash1, 16) ^ int(phash2, 16)).count("1")
+    return round((64 - hd) / 64 * 100, 1)
+
+
 def generate_tiled_sha256(frame: np.ndarray, grid: tuple[int, int] = (8, 8)) -> dict:
     """
     Splits frame into grid tiles and hashes each independently.
@@ -68,11 +91,12 @@ def generate_tiled_sha256(frame: np.ndarray, grid: tuple[int, int] = (8, 8)) -> 
     # Normalize to canonical size + grayscale — makes hashes codec-independent
     frame = _normalize_for_tiling(frame)
 
-    rows, cols         = grid
-    h, w               = frame.shape[:2]
-    tile_h, tile_w     = h // rows, w // cols
-    tile_hashes: dict  = {}
-    tile_data: dict    = {}
+    rows, cols          = grid
+    h, w                = frame.shape[:2]
+    tile_h, tile_w      = h // rows, w // cols
+    tile_hashes: dict   = {}
+    tile_phashes: dict  = {}
+    tile_data: dict     = {}
 
     for r in range(rows):
         for c in range(cols):
@@ -81,9 +105,9 @@ def generate_tiled_sha256(frame: np.ndarray, grid: tuple[int, int] = (8, 8)) -> 
                 c * tile_w : (c + 1) * tile_w,
             ]
             key = f"{r}_{c}"
-            tile_hashes[key] = hashlib.sha256(tile.tobytes()).hexdigest()
-            # Store tile data for later pixel-level comparison
-            tile_data[key] = tile
+            tile_hashes[key]  = hashlib.sha256(tile.tobytes()).hexdigest()
+            tile_phashes[key] = generate_tile_phash(tile)
+            tile_data[key]    = tile
 
     root = hashlib.sha256(
         "".join(
@@ -94,10 +118,11 @@ def generate_tiled_sha256(frame: np.ndarray, grid: tuple[int, int] = (8, 8)) -> 
     ).hexdigest()
 
     return {
-        "grid": f"{rows}x{cols}",
-        "tiles": tile_hashes,
-        "tile_data": tile_data,  # For pixel-level comparison
-        "root": root,
+        "grid":         f"{rows}x{cols}",
+        "tiles":        tile_hashes,
+        "tile_phashes": tile_phashes,
+        "tile_data":    tile_data,
+        "root":         root,
     }
 
 
