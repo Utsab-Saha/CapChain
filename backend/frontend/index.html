@@ -1396,7 +1396,9 @@
         if (data.exact_record) {
           const r = data.exact_record;
           const simPct = data.exact_similarity_pct != null ? data.exact_similarity_pct : 100;
+          const hdExact = Math.round((1 - simPct / 100) * 64);
           html += hashRow('Status', `✓ Exact match — ${simPct}% similarity`, 'verified');
+          html += hashRow('Hamming Distance', `${hdExact} / 64 bits`, 'verified');
           html += hashRow('Captured At', r.captured_at ? new Date(r.captured_at * 1000).toLocaleString() : '—');
           html += hashRow('Type', r.capture_type || 'snapshot');
           if (r.merkle_root) html += hashRow('Stored Merkle Root', r.merkle_root.slice(0,16) + '…');

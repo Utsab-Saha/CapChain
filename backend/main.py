@@ -326,34 +326,36 @@ async def verify_frame(payload: VerifyPayload) -> dict:
 
         suspect_fp["tiled"]["tile_data"] = suspect_tile_data
 
-        # 1. Exact SHA256 match in Postgres / in-memory
+        # 1. Exact SHA256 match
         exact_db_match = await search_by_sha256(suspect_fp["sha256"])
 
-        # 2. Perceptual hash — find visually similar snapshots
-        similar_matches_raw = await search_by_phash(suspect_fp["phash"]) or []
-
-        # Remove the exact match from similar list to avoid duplication
-        exact_sha = suspect_fp["sha256"]
-        similar_matches_raw = [
-            m for m in similar_matches_raw
-            if m["sha256"] != exact_sha
-        ]
-
-        # Enrich each similar match with hamming distance + similarity %
+        # 2. Hamming-distance search across ALL snapshots (search_by_phash is exact-only)
+        #    Threshold <=10 bits (~84%+ similar)
+        HAMMING_THRESHOLD = 10
+        all_snaps = await get_all_snapshots()
         similar_matches = []
-        for m in similar_matches_raw:
-            hd = hamming_distance(suspect_fp["phash"], m["phash"])
-            similarity_pct = round((64 - hd) / 64 * 100, 1)
-            similar_matches.append({**m, "hamming_distance": hd, "similarity_pct": similarity_pct})
+        for snap in all_snaps:
+            if snap["sha256"] == suspect_fp["sha256"]:
+                continue
+            if not snap.get("phash"):
+                continue
+            hd = hamming_distance(suspect_fp["phash"], snap["phash"])
+            if hd <= HAMMING_THRESHOLD:
+                similar_matches.append({
+                    **snap,
+                    "hamming_distance": hd,
+                    "similarity_pct": round((64 - hd) / 64 * 100, 1),
+                })
+        similar_matches.sort(key=lambda m: m["hamming_distance"])
 
-        # For exact match also compute similarity (should be 100%)
+        # Similarity % for exact match
         if exact_db_match and exact_db_match.get("phash"):
             hd_exact = hamming_distance(suspect_fp["phash"], exact_db_match["phash"])
             exact_similarity_pct = round((64 - hd_exact) / 64 * 100, 1)
         else:
             exact_similarity_pct = 100.0 if exact_db_match else None
 
-        # Per-tile similarity for the best match (exact or most similar)
+        # 3. Per-tile similarity vs best match (tile hashes from DB — no pixel data needed)
         tile_similarity: dict = {}
         best_match_sha = None
         if exact_db_match:
@@ -367,24 +369,20 @@ async def verify_frame(payload: VerifyPayload) -> dict:
                 suspect_tiles = suspect_fp["tiled"]["tiles"]
                 orig_tiles    = original_tiled.get("tiles", {})
                 for key in suspect_tiles:
-                    if key in orig_tiles:
-                        # hash match → 100% similar; mismatch → use pixel diff if available
-                        if suspect_tiles[key] == orig_tiles[key]:
-                            tile_similarity[key] = 100.0
-                        else:
-                            # Try pixel-level diff using cached tile data
-                            orig_px  = tile_data_store.get(best_match_sha, {}).get(key)
-                            sus_px   = suspect_tile_data.get(key)
-                            if orig_px is not None and sus_px is not None:
-                                diff_pct = _calculate_tile_diff_pct(orig_px, sus_px)
-                                tile_similarity[key] = round(100.0 - diff_pct, 1)
-                            else:
-                                tile_similarity[key] = 0.0
-                    else:
+                    if key not in orig_tiles:
                         tile_similarity[key] = 0.0
+                    elif suspect_tiles[key] == orig_tiles[key]:
+                        tile_similarity[key] = 100.0
+                    else:
+                        orig_px = tile_data_store.get(best_match_sha, {}).get(key)
+                        sus_px  = suspect_tile_data.get(key)
+                        if orig_px is not None and sus_px is not None:
+                            diff_pct = _calculate_tile_diff_pct(orig_px, sus_px)
+                            tile_similarity[key] = round(100.0 - diff_pct, 1)
+                        else:
+                            tile_similarity[key] = 0.0
 
-        # 3. Blockchain check — verify sha256 on Polygon
-        # (snapshot anchors fp["sha256"], so we must verify the same value)
+        # 4. Blockchain check
         blockchain_result = verify_on_chain(suspect_fp["sha256"])
 
         # Build verdict
