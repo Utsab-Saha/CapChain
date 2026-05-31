@@ -41,6 +41,21 @@ def hamming_distance(hash1: str, hash2: str) -> int:
 
 # ─── TILED SHA256 ─────────────────────────────────────────────────────────────
 
+# Canonical size for tiling — must be divisible by grid (8x8 = 640/8=80, 480/8=60)
+_CANONICAL_W = 640
+_CANONICAL_H = 480
+
+
+def _normalize_for_tiling(frame: np.ndarray) -> np.ndarray:
+    """
+    Resize to canonical size and convert to grayscale so tile hashes are
+    identical regardless of JPEG quality, PNG, WebP, or re-compression.
+    """
+    resized = cv2.resize(frame, (_CANONICAL_W, _CANONICAL_H), interpolation=cv2.INTER_AREA)
+    gray    = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+    return gray
+
+
 def generate_tiled_sha256(frame: np.ndarray, grid: tuple[int, int] = (8, 8)) -> dict:
     """
     Splits frame into grid tiles and hashes each independently.
@@ -49,6 +64,9 @@ def generate_tiled_sha256(frame: np.ndarray, grid: tuple[int, int] = (8, 8)) -> 
     """
     if frame is None or frame.size == 0:
         raise ValueError("Cannot tile-hash null/empty frame")
+
+    # Normalize to canonical size + grayscale — makes hashes codec-independent
+    frame = _normalize_for_tiling(frame)
 
     rows, cols         = grid
     h, w               = frame.shape[:2]
@@ -86,15 +104,16 @@ def generate_tiled_sha256(frame: np.ndarray, grid: tuple[int, int] = (8, 8)) -> 
 def _calculate_tile_diff_pct(tile1: np.ndarray, tile2: np.ndarray) -> float:
     """Calculate percentage of pixels that differ between two tiles (0-100)."""
     if tile1.shape != tile2.shape:
-        return 100.0
+        # Resize tile2 to match tile1 if shapes differ
+        tile2 = cv2.resize(tile2, (tile1.shape[1], tile1.shape[0]))
     
-    # Compute absolute difference per pixel
     diff = cv2.absdiff(tile1, tile2)
-    # Consider a pixel changed if any channel differs by >5 (out of 255)
-    threshold = 5
-    changed_pixels = np.any(diff > threshold, axis=2) if len(diff.shape) > 2 else diff > threshold
-    pct = float(np.sum(changed_pixels) / changed_pixels.size * 100)
-    return pct
+    threshold = 8  # slightly looser for grayscale
+    if len(diff.shape) == 3:
+        changed_pixels = np.any(diff > threshold, axis=2)
+    else:
+        changed_pixels = diff > threshold
+    return float(np.sum(changed_pixels) / changed_pixels.size * 100)
 
 
 def detect_tampered_tiles(

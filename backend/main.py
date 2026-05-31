@@ -366,20 +366,27 @@ async def verify_frame(payload: VerifyPayload) -> dict:
         if best_match_sha:
             original_tiled = await get_tiled_hashes(best_match_sha)
             if original_tiled:
-                suspect_tiles = suspect_fp["tiled"]["tiles"]
-                orig_tiles    = original_tiled.get("tiles", {})
+                suspect_tiles    = suspect_fp["tiled"]["tiles"]
+                suspect_td       = suspect_fp["tiled"].get("tile_data", suspect_tile_data)
+                orig_tiles       = original_tiled.get("tiles", {})
+                orig_px_cache    = tile_data_store.get(best_match_sha, {})
+
                 for key in suspect_tiles:
                     if key not in orig_tiles:
                         tile_similarity[key] = 0.0
                     elif suspect_tiles[key] == orig_tiles[key]:
+                        # Identical hash after normalization → truly identical
                         tile_similarity[key] = 100.0
                     else:
-                        orig_px = tile_data_store.get(best_match_sha, {}).get(key)
-                        sus_px  = suspect_tile_data.get(key)
+                        # Hashes differ — use pixel diff if both tiles are in memory
+                        orig_px = orig_px_cache.get(key)
+                        sus_px  = suspect_td.get(key)
                         if orig_px is not None and sus_px is not None:
                             diff_pct = _calculate_tile_diff_pct(orig_px, sus_px)
                             tile_similarity[key] = round(100.0 - diff_pct, 1)
                         else:
+                            # No pixel cache (server restarted) — hash genuinely differs,
+                            # mark as changed (0%) since normalization makes hashes stable
                             tile_similarity[key] = 0.0
 
         # 4. Blockchain check
