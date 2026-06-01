@@ -729,6 +729,158 @@ async def search_video_hashes(
     }
 
 
+# ─── Video Search / Verification ────────────────────────────────────────────
+
+@app.post("/search/video")
+async def search_video(
+    file: bytes = File(...),
+    frame_interval: int = Form(default=10)
+) -> dict:
+    """
+    Extract frames from a video file at specified interval and search
+    the database for matches on each frame.
+    """
+    try:
+        # Save temp video file
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+            tmp.write(file)
+            tmp_path = tmp.name
+
+        # Open video
+        cap = cv2.VideoCapture(tmp_path)
+        if not cap.isOpened():
+            raise ValueError("Cannot open video file")
+
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        if total_frames == 0:
+            raise ValueError("Video has no frames")
+
+        # Extract frames at interval
+        frame_results = []
+        extracted_count = 0
+        frames_with_matches = 0
+        frames_on_blockchain = 0
+        total_similar_matches = 0
+
+        frame_idx = 0
+        all_snapshots = await get_all_snapshots()
+        HAMMING_THRESHOLD = 10
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            # Extract frame at specified interval
+            if frame_idx % frame_interval != 0:
+                frame_idx += 1
+                continue
+
+            extracted_count += 1
+            timestamp = frame_idx / fps if fps > 0 else 0
+
+            try:
+                # Fingerprint the frame
+                suspect_fp = fingerprint_frame(frame)
+                suspect_sha = suspect_fp["sha256"]
+
+                # 1. Search for exact match in database
+                exact_db_match = await search_by_sha256(suspect_sha)
+
+                # 2. Search for similar matches (Hamming distance)
+                similar_matches = []
+                for snap in all_snapshots:
+                    if snap["sha256"] == suspect_sha:
+                        continue
+                    if not snap.get("phash"):
+                        continue
+                    hd = hamming_distance(suspect_fp["phash"], snap["phash"])
+                    if hd <= HAMMING_THRESHOLD:
+                        similar_matches.append({
+                            **snap,
+                            "hamming_distance": hd,
+                            "similarity_pct": round((64 - hd) / 64 * 100, 1),
+                            "capture_type": snap.get("capture_type", "snapshot"),
+                        })
+
+                similar_matches.sort(key=lambda m: m["hamming_distance"])
+
+                # 3. Check blockchain for exact match
+                blockchain_result = None
+                if exact_db_match:
+                    blockchain_result = verify_on_chain(suspect_sha)
+                    if blockchain_result.get("verified"):
+                        frames_on_blockchain += 1
+
+                # Track statistics
+                found_in_db = exact_db_match is not None or len(similar_matches) > 0
+                if found_in_db:
+                    frames_with_matches += 1
+                    total_similar_matches += len(similar_matches)
+
+                frame_result = {
+                    "frame_number": extracted_count,
+                    "timestamp": timestamp,
+                    "sha256": suspect_sha,
+                    "phash": suspect_fp["phash"],
+                    "exact_match": exact_db_match,
+                    "similar_matches": similar_matches,
+                    "blockchain_status": blockchain_result,
+                    "found_in_database": found_in_db,
+                }
+
+                frame_results.append(frame_result)
+
+            except Exception as e:
+                print(f"[video-search] Error processing frame {frame_idx}: {e}")
+                frame_results.append({
+                    "frame_number": extracted_count,
+                    "timestamp": timestamp,
+                    "sha256": None,
+                    "phash": None,
+                    "exact_match": None,
+                    "similar_matches": [],
+                    "blockchain_status": None,
+                    "found_in_database": False,
+                    "error": str(e),
+                })
+
+            frame_idx += 1
+
+        cap.release()
+
+        # Cleanup temp file
+        import os
+        try:
+            os.unlink(tmp_path)
+        except:
+            pass
+
+        return {
+            "video_info": {
+                "total_frames": total_frames,
+                "extracted_frames": extracted_count,
+                "fps": fps,
+            },
+            "summary": {
+                "frames_with_matches": frames_with_matches,
+                "frames_on_blockchain": frames_on_blockchain,
+                "total_similar_matches": total_similar_matches,
+            },
+            "frame_results": frame_results,
+            "total_database_records": len(all_snapshots),
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Video processing failed: {str(e)}"
+        )
+
+
 # ─── WebSocket ───────────────────────────────────────────────────────────────
 
 @app.websocket("/ws/live/{session_id}")
