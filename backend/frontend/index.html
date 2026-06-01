@@ -732,24 +732,7 @@
 <body>
 
 <!-- ── HEADER ────────────────────────────────────────────────────────── -->
-<header>
-  <div class="logo">
-    <div class="logo-mark">
-      <i class="ti ti-link" aria-hidden="true"></i>
-    </div>
-    <div class="logo-wordmark">
-      <div class="logo-name">Frame Fingerprinting </div>
-       
-    </div>
-  </div>
-  <div class="header-right">
-     
-    <div id="api-status">
-      <div class="status-indicator" id="status-dot"></div>
-      <span id="status-text">Connecting</span>
-    </div>
-  </div>
-</header>
+ 
 
 <!-- ── APP BODY ──────────────────────────────────────────────────────── -->
 <div class="app-body">
@@ -759,21 +742,10 @@
     <div class="sidebar-group-label">Capture</div>
 
     <button class="nav-item active" data-tab="snapshot">
-      <i class="ti ti-camera" aria-hidden="true"></i> Snapshot
+      <i class="ti ti-camera" aria-hidden="true"></i> CAPTURE  
     </button>
     <button class="nav-item" data-tab="verify">
       <i class="ti ti-shield-check" aria-hidden="true"></i> Verify
-    </button>
-
-    <div class="nav-divider"></div>
-
-    <div class="sidebar-group-label">Streaming</div>
-
-    <button class="nav-item" data-tab="video">
-      <i class="ti ti-video" aria-hidden="true"></i> Video Session
-    </button>
-    <button class="nav-item" data-tab="live">
-      <i class="ti ti-bolt" aria-hidden="true"></i> Live WebSocket
     </button>
 
     <div class="sidebar-footer">
@@ -835,6 +807,86 @@
           <i class="ti ti-tournament" aria-hidden="true"></i> Merkle Tree
         </div>
         <div class="merkle-vis" id="snap-merkle-vis"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <i class="ti ti-video" aria-hidden="true"></i> Video Recording
+        </div>
+        <div class="camera-wrap" id="vid-cam-wrap">
+          <video id="vid-video" autoplay muted playsinline></video>
+          <canvas class="preview" id="vid-canvas"></canvas>
+          <div class="rec-badge" id="vid-live">REC</div>
+          <div class="cam-overlay" id="vid-cam-overlay">
+            <i class="ti ti-video-off" aria-hidden="true"></i>
+            <span>Start a session to begin recording</span>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="btn-vid-start">
+            <i class="ti ti-player-play"></i> Start Session
+          </button>
+          <button class="btn-danger" id="btn-vid-end" disabled>
+            <i class="ti ti-player-stop"></i> End Session
+          </button>
+          <button class="btn-ghost" id="btn-vid-snap" disabled>
+            <i class="ti ti-camera"></i> Capture Frame
+          </button>
+          <button class="btn-ghost" id="btn-vid-download" disabled>
+            <i class="ti ti-download"></i> Export JPG
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <i class="ti ti-chart-line" aria-hidden="true"></i> Session Monitor
+        </div>
+
+        <div class="session-bar">
+          <div class="session-stats">
+            <div class="stat">
+              <div class="stat-label">Session ID</div>
+              <div class="stat-value" id="stat-session-id">—</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Frames</div>
+              <div class="stat-value" id="stat-frames">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Status</div>
+              <div class="stat-value" id="stat-status">Idle</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-label">Chain Log</div>
+        <div class="chain-log" id="vid-chain-log">
+          <div class="entry">Waiting for session…</div>
+        </div>
+
+        <div id="vid-end-results" style="margin-top:.75rem"></div>
+
+        <div id="vid-export-row" style="display:none;margin-top:.85rem;border-top:1px solid var(--border);padding-top:.85rem">
+          <div class="section-label" style="margin-bottom:.55rem">
+            <i class="ti ti-download" style="font-size:12px;color:var(--accent)" aria-hidden="true"></i>
+            Export Session
+          </div>
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">
+            <button class="btn-ghost" id="btn-vid-export-json">
+              <i class="ti ti-file-type-json"></i> JSON
+            </button>
+            <button class="btn-ghost" id="btn-vid-export-csv">
+              <i class="ti ti-file-type-csv"></i> CSV
+            </button>
+            <button class="btn-ghost" id="btn-vid-export-mp4">
+              <i class="ti ti-video-plus"></i> Download Video
+            </button>
+            <span style="font-family:var(--mono);font-size:.57rem;color:var(--text3);margin-left:.2rem" id="vid-export-hint">
+              Session metadata + all frame hashes
+            </span>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -912,146 +964,6 @@
 
     </div>
 
-    <!-- ── VIDEO SESSION ─────────────────────────────────────────────── -->
-    <div class="tab-panel" id="tab-video">
-
-      <div class="card">
-        <div class="card-title">
-          <i class="ti ti-video" aria-hidden="true"></i> Video Camera
-        </div>
-        <div class="camera-wrap" id="vid-cam-wrap">
-          <video id="vid-video" autoplay muted playsinline></video>
-          <canvas class="preview" id="vid-canvas"></canvas>
-          <div class="rec-badge" id="vid-live">REC</div>
-          <div class="cam-overlay" id="vid-cam-overlay">
-            <i class="ti ti-video-off" aria-hidden="true"></i>
-            <span>Start a session to begin recording</span>
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn-primary" id="btn-vid-start">
-            <i class="ti ti-player-play"></i> Start Session
-          </button>
-          <button class="btn-danger" id="btn-vid-end" disabled>
-            <i class="ti ti-player-stop"></i> End Session
-          </button>
-          <button class="btn-ghost" id="btn-vid-snap" disabled>
-            <i class="ti ti-camera"></i> Capture
-          </button>
-          <button class="btn-ghost" id="btn-vid-download" disabled>
-            <i class="ti ti-download"></i> Download JPG
-          </button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">
-          <i class="ti ti-chart-line" aria-hidden="true"></i> Session Monitor
-        </div>
-
-        <div class="session-bar">
-          <div class="session-stats">
-            <div class="stat">
-              <div class="stat-label">Session ID</div>
-              <div class="stat-value" id="stat-session-id">—</div>
-            </div>
-            <div class="stat">
-              <div class="stat-label">Frames</div>
-              <div class="stat-value" id="stat-frames">0</div>
-            </div>
-            <div class="stat">
-              <div class="stat-label">Status</div>
-              <div class="stat-value" id="stat-status">Idle</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="section-label">Chain Log</div>
-        <div class="chain-log" id="vid-chain-log">
-          <div class="entry">Waiting for session…</div>
-        </div>
-
-        <div id="vid-end-results" style="margin-top:.75rem"></div>
-
-        <div id="vid-export-row" style="display:none;margin-top:.85rem;border-top:1px solid var(--border);padding-top:.85rem">
-          <div class="section-label" style="margin-bottom:.55rem">
-            <i class="ti ti-download" style="font-size:12px;color:var(--accent)" aria-hidden="true"></i>
-            Export Session
-          </div>
-          <div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">
-            <button class="btn-ghost" id="btn-vid-export-json">
-              <i class="ti ti-file-type-json"></i> JSON
-            </button>
-            <button class="btn-ghost" id="btn-vid-export-csv">
-              <i class="ti ti-file-type-csv"></i> CSV
-            </button>
-            <button class="btn-ghost" id="btn-vid-export-mp4">
-              <i class="ti ti-video-plus"></i> Download Video
-            </button>
-            <span style="font-family:var(--mono);font-size:.57rem;color:var(--text3);margin-left:.2rem" id="vid-export-hint">
-              Session metadata + all frame hashes
-            </span>
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- ── LIVE WS ────────────────────────────────────────────────────── -->
-    <div class="tab-panel" id="tab-live">
-
-      <div class="card">
-        <div class="card-title">
-          <i class="ti ti-bolt" aria-hidden="true"></i> Live Stream
-        </div>
-        <div class="camera-wrap" id="ws-cam-wrap">
-          <video id="ws-video" autoplay muted playsinline></video>
-          <div class="rec-badge" id="ws-live">WS</div>
-          <div class="cam-overlay" id="ws-cam-overlay">
-            <i class="ti ti-wifi-off" aria-hidden="true"></i>
-            <span>Connect WebSocket to start streaming</span>
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn-primary" id="btn-ws-connect">
-            <i class="ti ti-plug-connected"></i> Connect
-          </button>
-          <button class="btn-danger" id="btn-ws-disconnect" disabled>
-            <i class="ti ti-plug-connected-x"></i> Disconnect
-          </button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">
-          <i class="ti ti-antenna" aria-hidden="true"></i> Live Fingerprints
-        </div>
-
-        <div class="session-bar">
-          <div class="session-stats">
-            <div class="stat">
-              <div class="stat-label">Frames/s</div>
-              <div class="stat-value" id="ws-fps">0</div>
-            </div>
-            <div class="stat">
-              <div class="stat-label">Total</div>
-              <div class="stat-value" id="ws-total">0</div>
-            </div>
-            <div class="stat">
-              <div class="stat-label">WS State</div>
-              <div class="stat-value" id="ws-state">—</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="section-label">Event Log</div>
-        <div class="chain-log" id="ws-log">
-          <div class="entry">Waiting for connection…</div>
-        </div>
-      </div>
-
-    </div>
-
   </main>
 </div>
 
@@ -1060,7 +972,7 @@
 <script>
   const API = window.location.origin;
 
-  let snapStream = null, verStream = null, vidStream = null, wsStream = null;
+  let snapStream = null, verStream = null, vidStream = null;
   let snapSha256 = null;
   let snapCaptureB64 = null;
   let vidSessionId = null;
@@ -1071,9 +983,6 @@
   let mediaRecorder = null;
   let vidRecordedChunks = [];
   let vidRecordedBlob = null;
-  let socket = null;
-  let wsFrameTimer = null;
-  let wsFpsCounter = 0, wsTotal = 0;
 
   /* ── Health check ─────────────────────────────────────────────────── */
   async function checkHealth() {
@@ -1386,73 +1295,37 @@
       if (data.standalone) {
         let html = '';
 
-        // Fingerprint hashes
-        html += hashRow('SHA256', data.sha256 || '—');
-        html += hashRow('pHash', data.phash || '—', 'verified');
-        html += hashRow('Merkle Root', data.merkle_root ? data.merkle_root.slice(0,16) + '…' : '—');
-
-        html += `<div style="height:.5rem"></div>`;
-
-        // ── Exact match ──────────────────────────────────────────────
-        html += `<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:.35rem">Postgres · Exact SHA256</div>`;
+        // Show match result and percentage only
         if (data.exact_record) {
           const r = data.exact_record;
           const simPct = data.exact_similarity_pct != null ? data.exact_similarity_pct : 100;
-          const hdExact = Math.round((1 - simPct / 100) * 64);
-          html += hashRow('Status', `✓ Exact match — ${simPct}% similarity`, 'verified');
-          html += hashRow('Hamming Distance', `${hdExact} / 64 bits`, 'verified');
-          html += hashRow('Captured At', r.captured_at ? new Date(r.captured_at * 1000).toLocaleString() : '—');
-          html += hashRow('Type', r.capture_type || 'snapshot');
-          if (r.merkle_root) html += hashRow('Stored Merkle Root', r.merkle_root.slice(0,16) + '…');
-          if (r.blockchain_tx_hash) html += hashRow('TX Hash', r.blockchain_tx_hash.slice(0,16) + '…');
+          html += hashRow('Match', `✓ ${r.capture_type || 'Record'} found`, 'verified');
+          html += hashRow('Percentage Match', `${simPct}%`, 'verified');
+          
+          // Check if on chain
+          const bc = data.blockchain || {};
+          if (!bc.verified && !bc.mock) {
+            html += `<div style="margin-top:.5rem;padding:.5rem;background:rgba(196,136,26,0.1);border-left:2px solid var(--warning);border-radius:2px;font-family:var(--mono);font-size:.65rem;color:var(--warning)">
+              ⚠ DIDN'T MATCH WITH CHAIN
+            </div>`;
+          }
+        } else if (data.similar_matches && data.similar_matches.length > 0) {
+          const best = data.similar_matches[0];
+          const simPct = best.similarity_pct != null ? best.similarity_pct : '?';
+          html += hashRow('Match', `◐ Similar record found`, 'warning');
+          html += hashRow('Percentage Match', `${simPct}%`, 'warning');
+          html += `<div style="margin-top:.5rem;padding:.5rem;background:rgba(196,136,26,0.1);border-left:2px solid var(--warning);border-radius:2px;font-family:var(--mono);font-size:.65rem;color:var(--warning)">
+            ⚠ DIDN'T MATCH WITH CHAIN
+          </div>`;
         } else {
-          html += hashRow('Status', '✗ No exact match in database', 'danger');
-        }
-
-        html += `<div style="height:.5rem"></div>`;
-
-        // ── Similar matches (phash) ──────────────────────────────────
-        html += `<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:.35rem">Postgres · Similar Images (pHash)</div>`;
-        if (data.similar_matches && data.similar_matches.length > 0) {
-          html += hashRow('Similar Found', `${data.similar_matches.length} snapshot(s)`, 'warning');
-          data.similar_matches.slice(0, 3).forEach((m, i) => {
-            const simPct = m.similarity_pct != null ? m.similarity_pct : '?';
-            const simCls = simPct >= 90 ? 'verified' : simPct >= 70 ? 'warning' : 'danger';
-            html += hashRow(
-              `Match ${i + 1}`,
-              `${m.sha256.slice(0,16)}… · ${simPct}% similar · ${m.captured_at ? new Date(m.captured_at * 1000).toLocaleDateString() : '?'}`,
-              simCls
-            );
-          });
-        } else {
-          html += hashRow('Similar Found', 'None', data.exact_match ? 'verified' : '');
-        }
-
-        html += `<div style="height:.5rem"></div>`;
-
-        // ── Blockchain ───────────────────────────────────────────────
-        html += `<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:.35rem">Polygon · Blockchain</div>`;
-        const bc = data.blockchain || {};
-        if (bc.mock) {
-          html += hashRow('Blockchain', 'Not configured (mock mode)', 'warning');
-        } else if (bc.verified) {
-          html += hashRow('On-chain', '✓ Verified on Polygon', 'verified');
-          if (bc.anchored_at) html += hashRow('Anchored At', new Date(bc.anchored_at * 1000).toLocaleString());
-        } else if (bc.error) {
-          html += hashRow('Blockchain', `Error: ${bc.error}`, 'danger');
-        } else {
-          html += hashRow('On-chain', '✗ Not found on Polygon', 'danger');
+          html += hashRow('Match', '✗ No record found', 'danger');
+          html += hashRow('Percentage Match', '0%', 'danger');
+          html += `<div style="margin-top:.5rem;padding:.5rem;background:rgba(196,136,26,0.1);border-left:2px solid var(--warning);border-radius:2px;font-family:var(--mono);font-size:.65rem;color:var(--warning)">
+            ⚠ DIDN'T MATCH WITH CHAIN
+          </div>`;
         }
 
         results.innerHTML = html;
-
-        // Tile heat map — show if we have per-tile similarity data
-        if (data.tile_similarity && Object.keys(data.tile_similarity).length > 0) {
-          renderTileGrid([], data.tile_similarity);
-        } else if (data.best_match_sha) {
-          // No tile data cached (server restart) — show empty clean grid
-          renderTileGrid([], null);
-        }
         return;
       }
 
@@ -1542,47 +1415,24 @@
       if (data.frame_results.length === 0) {
         html += `<div class="empty">No frames to display</div>`;
       } else {
+        // Frame sequence visualization
+        html += `<div style="margin-top:.85rem">
+          <div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:.5rem">Frame Sequence</div>
+          <div style="display:flex;flex-wrap:wrap;gap:.35rem;padding:.65rem;background:var(--surface);border-radius:3px">`;
+        
         data.frame_results.forEach((frame, idx) => {
-          const timestamp = frame.timestamp.toFixed(2);
-          const exactMatch = frame.exact_match;
-          const hasBlockchain = frame.blockchain_status && frame.blockchain_status.verified;
-          
-          html += `<div class="auth-match sha256" style="margin-bottom:.65rem">
-            <strong>Frame #${frame.frame_number}</strong> @ ${timestamp}s<br>
-            SHA256: ${frame.sha256.slice(0, 16)}…<br>`;
-          
-          if (exactMatch) {
-            html += `<div style="margin-top:.35rem;padding:.4rem;background:var(--surface);border-left:2px solid var(--verified);border-radius:2px">
-              ✓ <strong>Exact Match</strong><br>
-              Captured: ${new Date(exactMatch.captured_at * 1000).toLocaleString()}<br>
-              Type: ${exactMatch.capture_type || 'unknown'}`;
-            
-            if (hasBlockchain) {
-              html += `<br><span style="color:var(--accent)">✓ Verified on Polygon</span>`;
-            }
-            html += `</div>`;
-          }
-          
-          if (frame.similar_matches.length > 0) {
-            html += `<div style="margin-top:.35rem;padding:.4rem;background:var(--surface);border-left:2px solid var(--warning);border-radius:2px">
-              <strong>${frame.similar_matches.length} Similar Match(es)</strong><br>`;
-            frame.similar_matches.slice(0, 2).forEach(m => {
-              html += `· Distance: ${m.hamming_distance} bits (${m.capture_type})<br>`;
-            });
-            if (frame.similar_matches.length > 2) {
-              html += `+${frame.similar_matches.length - 2} more matches<br>`;
-            }
-            html += `</div>`;
-          }
-          
-          if (!frame.found_in_database) {
-            html += `<div style="margin-top:.35rem;padding:.4rem;background:var(--surface);border-left:2px solid var(--text3);border-radius:2px">
-              ℹ No matches found for this frame
-            </div>`;
-          }
-          
-          html += `</div>`;
+          const isMatch = frame.exact_match || (frame.similar_matches && frame.similar_matches.length > 0);
+          const bgColor = isMatch ? 'var(--verified)' : 'var(--danger)';
+          const tooltip = isMatch ? `Frame ${frame.frame_number}: Match @ ${frame.timestamp.toFixed(2)}s` : `Frame ${frame.frame_number}: No match @ ${frame.timestamp.toFixed(2)}s`;
+          html += `<div style="width:14px;height:14px;border-radius:2px;background:${bgColor};opacity:0.7;cursor:pointer;transition:opacity 0.2s" title="${tooltip}"></div>`;
         });
+        
+        html += `</div>
+          <div style="display:flex;gap:1.5rem;margin-top:.5rem;font-size:.65rem;color:var(--text3)">
+            <div><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:var(--verified);margin-right:.35rem"></span>Match</div>
+            <div><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:var(--danger);margin-right:.35rem"></span>No Match</div>
+          </div>
+        </div>`;
       }
       
       html += `<div style="margin-top:.85rem;padding:.5rem .65rem;background:var(--surface);border-radius:3px;font-size:.58rem;color:var(--text3)">
@@ -1837,94 +1687,6 @@
     setTimeout(() => URL.revokeObjectURL(url), 10000);
     const mb = (vidRecordedBlob.size / 1048576).toFixed(1);
     document.getElementById('vid-export-hint').textContent = `Downloaded ${mb} MB → ${filename}`;
-  });
-
-  /* ══════════════════════════════ LIVE WEBSOCKET ══════════════════════*/
-  function wsLog(msg) {
-    const log = document.getElementById('ws-log');
-    const el  = document.createElement('div');
-    el.className = 'entry';
-    el.innerHTML = `<span class="ts">${new Date().toISOString().slice(11, 19)}</span>  ${msg}`;
-    log.appendChild(el);
-    log.scrollTop = log.scrollHeight;
-    while (log.children.length > 200) log.removeChild(log.firstChild);
-  }
-
-  document.getElementById('btn-ws-connect').addEventListener('click', async () => {
-    wsStream = await startCamera(
-      document.getElementById('ws-video'),
-      document.getElementById('ws-cam-overlay'),
-      document.getElementById('ws-live'));
-    if (!wsStream) return;
-
-    const sid   = uuidv4().slice(0, 8);
-    const wsUrl = `ws://https://capchain-vap3.onrender.com/ws/live/${sid}`;
-    document.getElementById('ws-state').textContent = 'Connecting';
-    wsLog(`Connecting to ${wsUrl}`);
-
-    try {
-      socket = new WebSocket(wsUrl);
-    } catch(e) {
-      wsLog(`Error: ${e.message}`);
-      return;
-    }
-
-    socket.onopen = () => {
-      document.getElementById('ws-state').textContent = 'Open';
-      wsLog('WebSocket connected');
-      document.getElementById('btn-ws-connect').disabled    = true;
-      document.getElementById('btn-ws-disconnect').disabled = false;
-
-      const canvas  = document.createElement('canvas');
-      const video   = document.getElementById('ws-video');
-      let fpsTimer  = Date.now();
-
-      wsFrameTimer = setInterval(() => {
-        if (socket.readyState !== WebSocket.OPEN) return;
-        canvas.width  = video.videoWidth  || 320;
-        canvas.height = video.videoHeight || 240;
-        canvas.getContext('2d').drawImage(video, 0, 0);
-        socket.send(canvas.toDataURL('image/jpeg', 0.6));
-        wsFpsCounter++;
-      }, 500);
-
-      setInterval(() => {
-        const now = Date.now();
-        const fps = Math.round(wsFpsCounter / ((now - fpsTimer) / 1000));
-        document.getElementById('ws-fps').textContent = fps;
-        wsFpsCounter = 0;
-        fpsTimer = now;
-      }, 1000);
-    };
-
-    socket.onmessage = e => {
-      wsTotal++;
-      document.getElementById('ws-total').textContent = wsTotal;
-      const d = JSON.parse(e.data);
-      wsLog(`#${d.sequence}  sha=${d.sha256}  chain=${d.chain_hash}`);
-    };
-
-    socket.onerror = () => {
-      document.getElementById('ws-state').textContent = 'Error';
-      wsLog('WebSocket error — is the backend running?');
-    };
-
-    socket.onclose = () => {
-      document.getElementById('ws-state').textContent = 'Closed';
-      wsLog('WebSocket disconnected');
-      clearInterval(wsFrameTimer);
-      document.getElementById('btn-ws-connect').disabled    = false;
-      document.getElementById('btn-ws-disconnect').disabled = true;
-    };
-  });
-
-  document.getElementById('btn-ws-disconnect').addEventListener('click', () => {
-    clearInterval(wsFrameTimer);
-    if (socket) socket.close();
-    wsStream = stopCamera(wsStream,
-      document.getElementById('ws-video'),
-      document.getElementById('ws-cam-overlay'),
-      document.getElementById('ws-live'));
   });
 </script>
 </body>
