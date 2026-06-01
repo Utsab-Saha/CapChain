@@ -1202,17 +1202,19 @@
           // Heat map: green (100%) → yellow (50%) → red (0%)
           const rc = pct < 50 ? 185 : Math.round(185 * (1 - (pct - 50) / 50));
           const gc = pct > 50 ? 158 : Math.round(158 * (pct / 50));
-          el.style.background  = `rgba(${rc},${gc},64,${pct < 100 ? 0.55 : 0.12})`;
-          el.style.borderColor = `rgba(${rc},${gc},64,${pct < 100 ? 0.70 : 0.25})`;
+          // Consistent opacity — 100% tiles used to be near-invisible (0.12), now clearly green
+          const alpha  = pct === 100 ? 0.45 : 0.62;
+          const alphaB = pct === 100 ? 0.60 : 0.78;
+          el.style.background  = `rgba(${rc},${gc},64,${alpha})`;
+          el.style.borderColor = `rgba(${rc},${gc},64,${alphaB})`;
           el.title = `Tile ${key}: ${pct}% similar`;
-          if (pct < 85) {
-            el.style.fontSize       = '7px';
-            el.style.color          = '#fff';
-            el.style.display        = 'flex';
-            el.style.alignItems     = 'center';
-            el.style.justifyContent = 'center';
-            el.textContent = `${Math.round(pct)}%`;
-          }
+          // Always show the % label so values are readable, not just implied by colour
+          el.style.fontSize       = '7px';
+          el.style.color          = pct >= 85 ? 'rgba(255,255,255,0.80)' : '#fff';
+          el.style.display        = 'flex';
+          el.style.alignItems     = 'center';
+          el.style.justifyContent = 'center';
+          el.textContent          = `${Math.round(pct)}%`;
         } else {
           el.classList.add(changed.has(key) ? 'changed' : 'clean');
           el.title = key;

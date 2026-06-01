@@ -385,21 +385,40 @@ async def verify_frame(payload: VerifyPayload) -> dict:
                     elif suspect_tiles[key] == orig_tiles[key]:
                         tile_similarity[key] = 100.0
                         exact_count += 1
-                    elif suspect_tph.get(key) and orig_tph.get(key):
-                        tile_similarity[key] = tile_phash_similarity(
-                            suspect_tph[key], orig_tph[key]
-                        )
-                        phash_count += 1
                     else:
-                        orig_px = orig_px_cache.get(key)
-                        sus_px  = suspect_td.get(key)
-                        if orig_px is not None and sus_px is not None:
-                            diff_pct = _calculate_tile_diff_pct(orig_px, sus_px)
-                            tile_similarity[key] = round(100.0 - diff_pct, 1)
-                            pixel_count += 1
+                        # --- Fallback priority: pHash → pixel → 0 ---
+                        # 1) Try pHash if both sides have a stored hash
+                        s_ph = suspect_tph.get(key)
+                        o_ph = orig_tph.get(key)
+
+                        if s_ph and o_ph:
+                            tile_similarity[key] = tile_phash_similarity(s_ph, o_ph)
+                            phash_count += 1
+
+                        # 2) If orig pHash is missing from DB but we have orig pixel
+                        #    data in memory, compute it on the fly
+                        elif s_ph:
+                            orig_px = orig_px_cache.get(key)
+                            if orig_px is not None:
+                                o_ph_computed = generate_tile_phash(orig_px)
+                                tile_similarity[key] = tile_phash_similarity(s_ph, o_ph_computed)
+                                phash_count += 1
+                            else:
+                                # No orig pixel data either — cannot compare
+                                tile_similarity[key] = 0.0
+                                zero_count += 1
+
+                        # 3) Pixel-level comparison
                         else:
-                            tile_similarity[key] = 0.0
-                            zero_count += 1
+                            orig_px = orig_px_cache.get(key)
+                            sus_px  = suspect_td.get(key)
+                            if orig_px is not None and sus_px is not None:
+                                diff_pct = _calculate_tile_diff_pct(orig_px, sus_px)
+                                tile_similarity[key] = round(100.0 - diff_pct, 1)
+                                pixel_count += 1
+                            else:
+                                tile_similarity[key] = 0.0
+                                zero_count += 1
 
                 print(f"[tile-sim] exact={exact_count} phash={phash_count} pixel={pixel_count} zero={zero_count} sample={list(tile_similarity.items())[:4]}")
 
