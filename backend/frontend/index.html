@@ -774,6 +774,14 @@
             <span>Start camera to begin</span>
           </div>
         </div>
+        <div style="margin-bottom:.65rem;display:flex;gap:.5rem">
+          <button class="btn-ghost" id="btn-snap-cam-front" style="flex:1;padding:.4rem .5rem;border:1px solid var(--border2);background:var(--surface);font-size:.65rem">
+            <i class="ti ti-camera-front"></i> Front
+          </button>
+          <button class="btn-ghost" id="btn-snap-cam-back" style="flex:1;padding:.4rem .5rem;border:1px solid var(--border2);background:var(--surface);font-size:.65rem">
+            <i class="ti ti-camera-back"></i> Back
+          </button>
+        </div>
         <div class="btn-row">
           <button class="btn-primary" id="btn-snap-start">
             <i class="ti ti-player-play"></i> Start
@@ -821,6 +829,14 @@
             <i class="ti ti-video-off" aria-hidden="true"></i>
             <span>Start a session to begin recording</span>
           </div>
+        </div>
+        <div style="margin-bottom:.65rem;display:flex;gap:.5rem">
+          <button class="btn-ghost" id="btn-vid-cam-front" style="flex:1;padding:.4rem .5rem;border:1px solid var(--border2);background:var(--surface);font-size:.65rem">
+            <i class="ti ti-camera-front"></i> Front
+          </button>
+          <button class="btn-ghost" id="btn-vid-cam-back" style="flex:1;padding:.4rem .5rem;border:1px solid var(--border2);background:var(--surface);font-size:.65rem">
+            <i class="ti ti-camera-back"></i> Back
+          </button>
         </div>
         <div class="btn-row">
           <button class="btn-primary" id="btn-vid-start">
@@ -983,10 +999,10 @@
   });
 
   /* ── Camera helpers ───────────────────────────────────────────────── */
-  async function startCamera(videoEl, overlayEl, liveEl, coordsEl) {
+  async function startCamera(videoEl, overlayEl, liveEl, coordsEl, facingMode = 'user') {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: 'user' }, audio: false,
+        video: { width: 640, height: 480, facingMode: facingMode }, audio: false,
       });
       videoEl.srcObject = stream;
       overlayEl.style.display = 'none';
@@ -1061,7 +1077,29 @@
     </div>`;
   }
 
+  let snapCameraMode = 'user'; // Default to front camera
+
   /* ══════════════════════════════ SNAPSHOT ════════════════════════════*/
+  document.getElementById('btn-snap-cam-front').addEventListener('click', () => {
+    snapCameraMode = 'user';
+    document.getElementById('btn-snap-cam-front').style.background = 'var(--accent)';
+    document.getElementById('btn-snap-cam-front').style.color = '#000';
+    document.getElementById('btn-snap-cam-back').style.background = 'var(--surface)';
+    document.getElementById('btn-snap-cam-back').style.color = 'var(--text)';
+  });
+
+  document.getElementById('btn-snap-cam-back').addEventListener('click', () => {
+    snapCameraMode = 'environment';
+    document.getElementById('btn-snap-cam-back').style.background = 'var(--accent)';
+    document.getElementById('btn-snap-cam-back').style.color = '#000';
+    document.getElementById('btn-snap-cam-front').style.background = 'var(--surface)';
+    document.getElementById('btn-snap-cam-front').style.color = 'var(--text)';
+  });
+
+  // Set initial state
+  document.getElementById('btn-snap-cam-front').style.background = 'var(--accent)';
+  document.getElementById('btn-snap-cam-front').style.color = '#000';
+
   document.getElementById('btn-snap-start').addEventListener('click', async () => {
     const btn = document.getElementById('btn-snap-start');
     if (snapStream) {
@@ -1078,7 +1116,8 @@
         document.getElementById('snap-video'),
         document.getElementById('snap-cam-overlay'),
         document.getElementById('snap-live'),
-        document.getElementById('snap-coords'));
+        document.getElementById('snap-coords'),
+        snapCameraMode);
       if (snapStream) {
         btn.innerHTML = '<i class="ti ti-player-stop"></i> Stop';
         document.getElementById('btn-snap-capture').disabled = false;
@@ -1369,11 +1408,35 @@
       (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
   }
 
+  let vidCameraMode = 'user'; // Default to front camera
+
+  document.getElementById('btn-vid-cam-front').addEventListener('click', () => {
+    vidCameraMode = 'user';
+    document.getElementById('btn-vid-cam-front').style.background = 'var(--accent)';
+    document.getElementById('btn-vid-cam-front').style.color = '#000';
+    document.getElementById('btn-vid-cam-back').style.background = 'var(--surface)';
+    document.getElementById('btn-vid-cam-back').style.color = 'var(--text)';
+  });
+
+  document.getElementById('btn-vid-cam-back').addEventListener('click', () => {
+    vidCameraMode = 'environment';
+    document.getElementById('btn-vid-cam-back').style.background = 'var(--accent)';
+    document.getElementById('btn-vid-cam-back').style.color = '#000';
+    document.getElementById('btn-vid-cam-front').style.background = 'var(--surface)';
+    document.getElementById('btn-vid-cam-front').style.color = 'var(--text)';
+  });
+
+  // Set initial state
+  document.getElementById('btn-vid-cam-front').style.background = 'var(--accent)';
+  document.getElementById('btn-vid-cam-front').style.color = '#000';
+
   document.getElementById('btn-vid-start').addEventListener('click', async () => {
     vidStream = await startCamera(
       document.getElementById('vid-video'),
       document.getElementById('vid-cam-overlay'),
-      document.getElementById('vid-live'));
+      document.getElementById('vid-live'),
+      null,
+      vidCameraMode);
     if (!vidStream) return;
 
     vidSessionId = uuidv4().slice(0, 8);
