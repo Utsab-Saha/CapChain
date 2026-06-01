@@ -368,6 +368,7 @@ async def verify_frame(payload: VerifyPayload) -> dict:
 
         if best_match_sha:
             original_tiled = await get_tiled_hashes(best_match_sha)
+            print(f"[tile-sim] original_tiled={original_tiled is not None} orig_tph_count={len(original_tiled.get('tile_phashes',{})) if original_tiled else 0} suspect_tph_count={len(suspect_fp['tiled'].get('tile_phashes',{}))}")
             if original_tiled:
                 suspect_tiles   = suspect_fp["tiled"]["tiles"]
                 suspect_tph     = suspect_fp["tiled"].get("tile_phashes", {})
@@ -376,30 +377,36 @@ async def verify_frame(payload: VerifyPayload) -> dict:
                 orig_px_cache   = tile_data_store.get(best_match_sha, {})
                 suspect_td      = suspect_fp["tiled"].get("tile_data", suspect_tile_data)
 
+                exact_count = phash_count = pixel_count = zero_count = 0
                 for key in suspect_tiles:
                     if key not in orig_tiles:
                         tile_similarity[key] = 0.0
+                        zero_count += 1
                     elif suspect_tiles[key] == orig_tiles[key]:
-                        # Identical SHA256 hash → byte-perfect match
                         tile_similarity[key] = 100.0
+                        exact_count += 1
                     elif suspect_tph.get(key) and orig_tph.get(key):
-                        # Hashes differ but both tile phashes available — use perceptual similarity
-                        # This is robust to JPEG re-compression and survives server restarts
                         tile_similarity[key] = tile_phash_similarity(
                             suspect_tph[key], orig_tph[key]
                         )
+                        phash_count += 1
                     else:
-                        # No tile phash in DB (old snapshot) — fall back to pixel diff
                         orig_px = orig_px_cache.get(key)
                         sus_px  = suspect_td.get(key)
                         if orig_px is not None and sus_px is not None:
                             diff_pct = _calculate_tile_diff_pct(orig_px, sus_px)
                             tile_similarity[key] = round(100.0 - diff_pct, 1)
+                            pixel_count += 1
                         else:
                             tile_similarity[key] = 0.0
+                            zero_count += 1
+
+                print(f"[tile-sim] exact={exact_count} phash={phash_count} pixel={pixel_count} zero={zero_count} sample={list(tile_similarity.items())[:4]}")
 
         # 4. Blockchain check
         blockchain_result = verify_on_chain(suspect_fp["sha256"])
+
+        print(f"[verify] best_match_sha={best_match_sha} tile_similarity_count={len(tile_similarity)} sample={list(tile_similarity.items())[:4]}")
 
         # Build verdict
         chain_ok = blockchain_result.get("verified", False)

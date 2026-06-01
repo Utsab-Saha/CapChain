@@ -58,25 +58,36 @@ def _normalize_for_tiling(frame: np.ndarray) -> np.ndarray:
 
 def generate_tile_phash(tile: np.ndarray, hash_size: int = 8) -> str:
     """
-    Compute a perceptual hash for a single tile.
-    Robust to JPEG re-compression, minor brightness shifts, sensor noise.
-    Tiles are already grayscale after normalization so skip cvtColor.
+    Compute a 64-bit perceptual hash for a single tile using DCT.
+    hash_size=8 → 8×8 = 64 bits stored as 16 hex chars.
+    Robust to JPEG re-compression, minor brightness/contrast shifts.
+    cv2.dct requires float32 and works best on square inputs.
     """
     # Ensure 2-D grayscale
     if len(tile.shape) == 3:
         tile = cv2.cvtColor(tile, cv2.COLOR_BGR2GRAY)
-    resized   = cv2.resize(tile, (hash_size + 1, hash_size), interpolation=cv2.INTER_AREA)
-    dct       = cv2.dct(resized.astype(np.float32))
-    dct_block = dct[:hash_size, :hash_size]
-    mean_val  = float(dct_block.mean())
-    bits      = (dct_block > mean_val).flatten()
-    return format(int("".join("1" if b else "0" for b in bits), 2), "016x")
+    # Resize to (dct_size x dct_size) — must be even, 32 works well
+    dct_size = 32
+    resized   = cv2.resize(tile, (dct_size, dct_size), interpolation=cv2.INTER_AREA)
+    dct_full  = cv2.dct(resized.astype(np.float32))
+    # Keep top-left hash_size x hash_size low-frequency coefficients
+    dct_block = dct_full[:hash_size, :hash_size]
+    # Exclude DC coefficient (0,0) from mean so flat tiles don't all hash the same
+    vals      = dct_block.flatten()
+    mean_val  = float(vals[1:].mean())
+    bits      = (vals > mean_val)
+    # Pack into hex string — 64 bits = 16 hex chars
+    int_val   = int("".join("1" if b else "0" for b in bits), 2)
+    return format(int_val, "016x")
 
 
 def tile_phash_similarity(phash1: str, phash2: str) -> float:
-    """Convert hamming distance between two tile phashes to a 0-100% similarity score."""
-    hd = bin(int(phash1, 16) ^ int(phash2, 16)).count("1")
-    return round((64 - hd) / 64 * 100, 1)
+    """Hamming distance between two 64-bit tile phashes → 0-100% similarity."""
+    try:
+        hd = bin(int(phash1, 16) ^ int(phash2, 16)).count("1")
+        return round((64 - hd) / 64 * 100, 1)
+    except (ValueError, TypeError):
+        return 0.0
 
 
 def generate_tiled_sha256(frame: np.ndarray, grid: tuple[int, int] = (8, 8)) -> dict:
