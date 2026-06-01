@@ -938,30 +938,6 @@
         <div id="video-search-results" style="margin-top:.85rem"></div>
       </div>
 
-      <div class="card col-full" id="ver-annotated-card" style="display:none">
-        <div class="card-title">
-          <i class="ti ti-adjustments-alt" aria-hidden="true"></i> Similarity Analysis
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.85rem;align-items:start">
-          <div>
-            <div class="section-label">Annotated Frame</div>
-            <div class="annotated-wrap" id="ver-annotated-wrap">
-              <img id="ver-annotated-img" src="" alt="Annotated frame" />
-            </div>
-          </div>
-          <div>
-            <div class="section-label">Tile Similarity Map (8×8)</div>
-            <div class="tile-grid" id="ver-tile-grid"></div>
-            <!-- Heat map legend -->
-            <div style="display:flex;align-items:center;gap:.5rem;margin-top:.5rem;font-size:.65rem;color:var(--text3)">
-              <div style="width:10px;height:10px;border-radius:2px;background:rgba(58,158,110,.55)"></div><span>100% identical</span>
-              <div style="width:10px;height:10px;border-radius:2px;background:rgba(185,158,64,.55);margin-left:.4rem"></div><span>~50%</span>
-              <div style="width:10px;height:10px;border-radius:2px;background:rgba(185,64,64,.55);margin-left:.4rem"></div><span>0% (fully changed)</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
     </div>
 
   </main>
@@ -1089,50 +1065,6 @@
       <div style="margin-top:.3rem"><span class="chain-badge ${cls}">${label}</span></div>
       ${bc.tx_hash ? `<div class="hash-value" style="margin-top:.3rem">${bc.tx_hash}</div>` : ''}
     </div>`;
-  }
-
-  /* ── Tile grid renderer ───────────────────────────────────────────── */
-  // tileSimilarity: object { "r_c": 0-100 } — if null, fall back to changed/clean binary
-  function renderTileGrid(changedTiles, tileSimilarity = null) {
-    const tileGrid      = document.getElementById('ver-tile-grid');
-    const annotatedCard = document.getElementById('ver-annotated-card');
-    tileGrid.innerHTML  = '';
-    const changed = new Set(changedTiles);
-    const hasSim  = tileSimilarity && Object.keys(tileSimilarity).length > 0;
-
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        const key = `${r}_${c}`;
-        const el  = document.createElement('div');
-        el.className = 'tile-cell';
-
-        if (hasSim && tileSimilarity[key] !== undefined) {
-          const pct = tileSimilarity[key];  // 0 = totally different, 100 = identical
-          // Heat map: green (100%) → yellow (50%) → red (0%)
-          const rc = pct < 50 ? 185 : Math.round(185 * (1 - (pct - 50) / 50));
-          const gc = pct > 50 ? 158 : Math.round(158 * (pct / 50));
-          // Consistent opacity — 100% tiles used to be near-invisible (0.12), now clearly green
-          const alpha  = pct === 100 ? 0.45 : 0.62;
-          const alphaB = pct === 100 ? 0.60 : 0.78;
-          el.style.background  = `rgba(${rc},${gc},64,${alpha})`;
-          el.style.borderColor = `rgba(${rc},${gc},64,${alphaB})`;
-          el.title = `Tile ${key}: ${pct}% similar`;
-          // Always show the % label so values are readable, not just implied by colour
-          el.style.fontSize       = '7px';
-          el.style.color          = pct >= 85 ? 'rgba(255,255,255,0.80)' : '#fff';
-          el.style.display        = 'flex';
-          el.style.alignItems     = 'center';
-          el.style.justifyContent = 'center';
-          el.textContent          = `${Math.round(pct)}%`;
-        } else {
-          el.classList.add(changed.has(key) ? 'changed' : 'clean');
-          el.title = key;
-        }
-
-        tileGrid.appendChild(el);
-      }
-    }
-    annotatedCard.style.display = 'block';
   }
 
   /* ══════════════════════════════ SNAPSHOT ════════════════════════════*/
@@ -1339,16 +1271,6 @@
           `${data.tamper?.changed_tiles?.length || 0} / 64  (${data.tamper?.change_pct}%)`,
           data.tamper?.tampered ? 'danger' : 'verified') +
         hashRow('Likely Region', data.tamper?.likely_region || 'none');
-
-      // If backend returns an annotated overlay, replace the fallback preview with it
-      if (data.annotated_image) {
-        annotatedImg.src = data.annotated_image;
-      }
-
-      // Tile grid — show card whenever tile data exists (even if all tiles are clean)
-      if (data.tamper) {
-        renderTileGrid(data.tamper.changed_tiles);
-      }
 
     } catch(e) {
       results.innerHTML = `<div class="empty" style="color:var(--danger)">Error: ${e.message}</div>`;
