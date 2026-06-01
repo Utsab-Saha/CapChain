@@ -926,12 +926,6 @@
           <input type="file" id="video-search-upload" accept="video/mp4,video/webm,video/avi,video/quicktime" />
           <div class="hint">Upload MP4, WebM, AVI, or MOV. System will extract frames, search database, and verify on Polygon.</div>
         </div>
-        <div style="margin-bottom:.7rem">
-          <div class="section-label">Frame Interval</div>
-          <input type="number" id="video-frame-interval" value="10" min="1" max="100" 
-            style="width:100%;padding:.45rem .65rem;background:var(--surface);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:.65rem" />
-          <div class="hint">Extract every Nth frame (e.g., 10 = every 10th frame). Lower = more frames, slower processing.</div>
-        </div>
         <button class="btn-primary" id="btn-video-search" style="width:100%;justify-content:center;padding:.55rem" disabled>
           <i class="ti ti-search"></i> Search Video
         </button>
@@ -1176,18 +1170,6 @@
     // Reset state
     verdict.style.display = 'none';
     results.innerHTML     = '<div class="empty"><div class="spinner" style="margin:0 auto"></div></div>';
-    document.getElementById('ver-tile-grid').innerHTML = '';
-
-    // Always show the submitted frame immediately in the annotated panel.
-    // The backend's annotated overlay (if returned) will replace it below.
-    const annotatedImg  = document.getElementById('ver-annotated-img');
-    const annotatedWrap = document.getElementById('ver-annotated-wrap');
-    const annotatedCard = document.getElementById('ver-annotated-card');
-    const previewUrl = URL.createObjectURL(verUploadedFile);
-    annotatedImg.onload = () => URL.revokeObjectURL(previewUrl);
-    annotatedImg.src          = previewUrl;
-    annotatedWrap.style.display = 'block';
-    annotatedCard.style.display = 'block';
 
     try {
       // Convert uploaded image to base64 and call /verify (auto-searches DB + blockchain)
@@ -1286,7 +1268,7 @@
   document.getElementById('btn-video-search').addEventListener('click', async () => {
     const fileInput = document.getElementById('video-search-upload');
     const file = fileInput.files?.[0];
-    const frameInterval = parseInt(document.getElementById('video-frame-interval').value) || 10;
+    const frameInterval = 10; // Default frame interval
     const resultsDiv = document.getElementById('video-search-results');
     const btn = document.getElementById('btn-video-search');
     
