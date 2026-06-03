@@ -241,7 +241,13 @@
     }
 
     .tab-panel { display: none; }
-    .tab-panel.active { display: grid; grid-template-columns: 1fr 1fr; gap: .85rem; }
+    #tab-snapshot.active { display: grid; grid-template-columns: 1fr 1fr; gap: .85rem; }
+    #tab-snapshot.active > .card:nth-child(1) { grid-column: 1; grid-row: 1; }
+    #tab-snapshot.active > .card:nth-child(4) { grid-column: 2; grid-row: 1; }
+    #tab-snapshot.active > .card:nth-child(2) { grid-column: 1; grid-row: 2; }
+    #tab-snapshot.active > .card:nth-child(5) { grid-column: 2; grid-row: 2; }
+    #tab-snapshot.active > .card:nth-child(3) { grid-column: 1 / -1; grid-row: 3; }
+    #tab-verify.active { display: grid; grid-template-columns: 1fr; gap: .85rem; }
 
     /* ── CARD ───────────────────────────────────────────────────────── */
     .card {
@@ -739,7 +745,7 @@
 
   <!-- SIDEBAR -->
   <nav class="sidebar">
-    <div class="sidebar-group-label">Capture</div>
+    <div class="sidebar-group-label">MENU</div>
 
     <button class="nav-item active" data-tab="snapshot">
       <i class="ti ti-camera" aria-hidden="true"></i> CAPTURE  
@@ -749,8 +755,8 @@
     </button>
 
     <div class="sidebar-footer">
-      No files on disk<br>
-      Zero disk persistence
+      No files are saved on disk<br>
+       
     </div>
   </nav>
 
@@ -762,7 +768,7 @@
 
       <div class="card">
         <div class="card-title">
-          <i class="ti ti-camera" aria-hidden="true"></i> Camera Input
+          <i class="ti ti-camera" aria-hidden="true"></i> Image Input
         </div>
         <div class="camera-wrap" id="snap-cam-wrap">
           <video id="snap-video" autoplay muted playsinline></video>
@@ -819,7 +825,7 @@
 
       <div class="card">
         <div class="card-title">
-          <i class="ti ti-video" aria-hidden="true"></i> Video Recording
+          <i class="ti ti-video" aria-hidden="true"></i> Video Input
         </div>
         <div class="camera-wrap" id="vid-cam-wrap">
           <video id="vid-video" autoplay muted playsinline></video>
@@ -827,7 +833,7 @@
           <div class="rec-badge" id="vid-live">REC</div>
           <div class="cam-overlay" id="vid-cam-overlay">
             <i class="ti ti-video-off" aria-hidden="true"></i>
-            <span>Start a session to begin recording</span>
+            <span>Start camera to begin</span>
           </div>
         </div>
         <div style="margin-bottom:.65rem;display:flex;gap:.5rem">
